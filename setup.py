@@ -25,14 +25,15 @@ def main():
           author_email='gydo.vanzundert@schrodinger.com',
           packages=packages,
           package_data = package_data,
-          ext_modules=ext_modules,
           data_files=data_files,
+          ext_modules=ext_modules,
           install_requires=['numpy', 'scipy', 'cvxopt', 'cplex'],
           entry_points={
               'console_scripts': [
                   'qfit_ligand = qfit_ligand.hierarchical:main',
-                  'qpsolve = qfit_ligand.solve:solve',
-                  'density = qfit_ligand.density:main',
+                  'qfit_solve = qfit_ligand.solve:solve',
+                  'qfit_density = qfit_ligand.density:main',
+                  'qfit_mtz_to_ccp4 = qfit_ligand.mtz_to_ccp4_p1:main',
                   ]
               },
          )
