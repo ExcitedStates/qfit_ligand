@@ -183,6 +183,8 @@ class CCP4Parser(object):
         elif maps == 2 and mapr == 1 and mapc == 3:
             self.density = np.swapaxes(self.density, 1, 2)
             self.density = np.swapaxes(self.density, 1, 0)
+        elif maps == 1 and mapr == 2 and mapc == 3:
+            self.density = np.swapaxes(self.density, 0, 2)
         else:
             raise ValueError("Density storage order ({:} {:} {:}) not supported.".format(maps, mapr, mapc))
         self.density = np.ascontiguousarray(self.density, dtype=np.float64)
