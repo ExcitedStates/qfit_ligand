@@ -33,7 +33,7 @@ def main():
                   'qfit_ligand = qfit_ligand.hierarchical:main',
                   'qfit_solve = qfit_ligand.solve:solve',
                   'qfit_density = qfit_ligand.density:main',
-                  'qfit_mtz_to_ccp4 = qfit_ligand.mtz_to_ccp4_p1:main',
+                  'qfit_mtz_to_ccp4 = qfit_ligand.qfit_mtz_to_ccp4:main',
                   ]
               },
          )
