@@ -10,6 +10,10 @@ def parse_args():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("mtz_file", type=file,
             help="Crystallographic mtz file.")
+    p.add_argument("-o", "--outfile", type=str, default=None,
+            help=("Output ccp4 file name containing density in P1. "
+                  "Default is adding _p1.ccp4 to mtz base filename.")
+            )
     args = p.parse_args()
     return args
 
@@ -32,7 +36,11 @@ def main():
     cmd = [os.path.join(CCTBX_BINDIR, 'phenix.mtz2map'), mtz_p1_fname]
     subprocess.call(cmd)
     # Rename the output file, since a lame '_1' is added.
-    ccp4_fname_init = mtz_fname_prefix + '_p1_1.ccp4'
-    ccp4_fname_final = mtz_fname_prefix + '_p1.ccp4'
+    ccp4_fname_prefix = os.path.split(mtz_fname_prefix)[1]
+    ccp4_fname_init = ccp4_fname_prefix + '_p1_1.ccp4'
+    if args.outfile is None:
+        ccp4_fname_final = ccp4_fname_prefix + '_p1.ccp4'
+    else:
+        ccp4_fname_final = args.outfile
+    print "Renaming {:s} to {:s}".format(os.path.abspath(ccp4_fname_init), os.path.abspath(ccp4_fname_final))
     os.rename(ccp4_fname_init, ccp4_fname_final)
-
