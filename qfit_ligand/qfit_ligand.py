@@ -45,7 +45,7 @@ def main():
 
     args = parse_args()
     mkdir_p(args.directory)
-    logging.basicConfig(filename=os.path.join(args.directory, 'hbuild.log'), 
+    logging.basicConfig(filename=os.path.join(args.directory, 'qfit_ligand.log'), 
                         level=logging.INFO)
     if args.verbose:
         console_out = logging.StreamHandler(stream=sys.stdout)
