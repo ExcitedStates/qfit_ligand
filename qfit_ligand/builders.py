@@ -38,9 +38,6 @@ class HierarchicalBuilder(object):
         else:
             self._rmask = 0.5 * self.resolution
 
-        for k, v in locals().iteritems():
-            logger.info("{:} = {:}".format(k, v))
-
         self._trans_box = [(-0.2, 0.21, 0.1), (-0.2, 0.21, 0.1), (-0.2, 0.21, 0.1)]
         self._sampling_range = np.deg2rad(np.arange(0, 360, self.stepsize))
         self._djoiner = DJoiner(directory)
@@ -87,9 +84,9 @@ class HierarchicalBuilder(object):
         for self._cluster_index, self._cluster in enumerate(self._clusters_to_sample):
             self._iteration = 0
             self._coor_set = list(self._starting_coor_set)
-            logger.debug("Cluster index: {:}".format(self._cluster_index))
+            logger.info("Cluster index: {:}".format(self._cluster_index))
             logger.info("Iteration: {:}".format(self._iteration))
-            logger.debug("Number of conformers: {:}".format(len(self._coor_set)))
+            logger.info("Number of conformers: {:}".format(len(self._coor_set)))
             if self.local_search:
                 self._local_search()
                 self._convert()
@@ -179,7 +176,7 @@ class HierarchicalBuilder(object):
         depths = bond_order.depth
         nbonds = len(bonds)
         starting_bond_index = 0
-        finished_building = False
+        finished_building = True if nbonds == 0 else False
         while not finished_building:
             end_bond_index = min(starting_bond_index + self.build_stepsize, nbonds)
             for bond_index in xrange(starting_bond_index, end_bond_index):
@@ -209,6 +206,7 @@ class HierarchicalBuilder(object):
                 # Check if any acceptable configurations have been created.
                 if not self._coor_set:
                     return
+                #self._write_intermediate_structures()
 
                 # Perform an MIQP if either the end bond index has been reached
                 # or if the end of a sidechain has been reached, i.e. if the
@@ -254,16 +252,6 @@ class HierarchicalBuilder(object):
             self._transformer.reset()
 
     def _QP(self):
-        #ligand_files_fname = self._djoiner('_ligand_files_{:d}_{:d}.txt').format(
-        #    self._cluster_index, self._iteration)
-        #with open(ligand_files_fname, 'w') as f:
-        #    ligand_fname = self._djoiner('intermediate_{:d}_{:d}_{:d}.pdb')
-        #    for n, coor in enumerate(self._coor_set):
-        #        self.ligand.coor[:] = coor
-        #        fname = ligand_fname.format(self._cluster_index, self._iteration, n)
-        #        self.ligand.tofile(fname)
-        #        f.write(fname)
-        #        f.write('\n')
         print 'QP'
         qpsolver = QPSolver(self._target, self._models)
         print 'Initializing'
@@ -285,15 +273,21 @@ class HierarchicalBuilder(object):
 
     def _update_conformers(self):
         print 'Number of conformers before: ', len(self._coor_set)
-        print self._occupancies
         new_coor_set = []
-        cutoff = min(1 / len(self._coor_set), 0.01)
+        #cutoff = min(1 / len(self._coor_set), 0.01)
+        cutoff = 1e-4
         for n, coor in enumerate(self._coor_set):
             if self._occupancies[n] >= cutoff:
                 new_coor_set.append(coor)
         self._coor_set = new_coor_set
         self._occupancies = self._occupancies[self._occupancies >= cutoff]
         print 'Number of conformers: ', len(self._coor_set)
+
+    def _write_intermediate_structures(self):
+        fname_base = self._djoiner('intermediate_{:d}_{:d}_{:d}.pdb')
+        for n, coor in enumerate(self._coor_set):
+            self.ligand.coor[:] = coor
+            self.ligand.tofile(fname_base.format(self._cluster_index, self._iteration, n))
 
     def _write_results(self):
         logger.info("Writing results to file.")
