@@ -1,12 +1,10 @@
-#! env/bin/python
 import os.path
+
 from setuptools import setup
 from setuptools.extension import Extension
 import numpy as np
 
-
 def main():
-
 
     packages = ['qfit_ligand']
     package_data = {'qfit_ligand': [os.path.join('data', '*.npy')]}
@@ -30,9 +28,9 @@ def main():
           install_requires=['numpy', 'scipy', 'cvxopt', 'cplex'],
           entry_points={
               'console_scripts': [
-                  'qfit_ligand = qfit_ligand.hierarchical:main',
-                  'qfit_solve = qfit_ligand.solve:solve',
-                  'qfit_density = qfit_ligand.density:main',
+                  'qfit_ligand = qfit_ligand.qfit_ligand:main',
+                  'qfit_solve = qfit_ligand.qfit_solve:solve',
+                  'qfit_density = qfit_ligand.qfit_density:main',
                   'qfit_mtz_to_ccp4 = qfit_ligand.qfit_mtz_to_ccp4:main',
                   ]
               },
