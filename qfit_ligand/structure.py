@@ -1,7 +1,8 @@
 import os
 from collections import defaultdict, Sequence
 import operator
-import string
+import logging
+logger = logging.getLogger(__name__)
 
 import numpy as np
 from scipy.spatial.distance import pdist as sp_pdist, squareform as sp_squareform
@@ -80,9 +81,17 @@ class Structure(object):
 
     def _get_property(self, ptype):
         elements, ind = np.unique(self.data['e'], return_inverse=True)
-        return np.asarray([getattr(
-                ELEMENTS[string.capwords(e)], ptype) for e in elements], 
-                dtype=np.float64)[ind]
+        values = []
+        for e in elements:
+            try:
+                value = getattr(ELEMENTS[e.capitalize()], ptype)
+            except KeyError:
+                logger.warning("Unknown element {:s}. Using Carbon parameter instead.".format(e))
+                value = getattr(ELEMENTS['C'], ptype)
+            values.append(value)
+        out = np.asarray(values, dtype=np.float64)[ind]
+        return out
+
 
     @property
     def covalent_radius(self):
