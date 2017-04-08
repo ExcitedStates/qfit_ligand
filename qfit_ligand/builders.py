@@ -20,14 +20,16 @@ class HierarchicalBuilder(object):
 
     """Build a multi-conformer ligand hierarchically."""
 
-    def __init__(self, ligand, xmap, resolution, receptor=None, local_search=True, 
-            stepsize=20, build_stepsize=2, directory='.', clean=True, roots=None):
+    def __init__(self, ligand, xmap, resolution, receptor=None, global_search=True,
+            local_search=True, stepsize=20, build_stepsize=2, directory='.', 
+            clean=True, roots=None):
         self.ligand = ligand
         self.stepsize= stepsize
         self.build_stepsize = build_stepsize
         self.directory = directory
         self.xmap = Volume.fromfile(xmap)
         self.resolution = resolution
+        self.global_search = global_search
         self.local_search = local_search
         self.clean = clean
         self.receptor = receptor
@@ -71,6 +73,17 @@ class HierarchicalBuilder(object):
 
     def __call__(self):
 
+        #if self.global_search:
+        #    self._coor_set = list(self._starting_coor_set)
+        #    self._global_search()
+        #    self._convert()
+        #    self._QP()
+        #    self._update_conformers()
+        #    self._convert()
+        #    self._MIQP()
+        #    self._update_conformers()
+        #    self._all_coor_set += self._coor_set
+
         for self._cluster_index, self._cluster in enumerate(self._clusters_to_sample):
             self._iteration = 0
             self._coor_set = list(self._starting_coor_set)
@@ -109,6 +122,25 @@ class HierarchicalBuilder(object):
             return self.ligand.clashes()
         else:
             return self.ligand.clashes() or self._cd() != 0
+
+    #def _global_search(self):
+    #    logger.info("Performing global search.")
+
+    #    rotation_set = RotationSets.get_set(20)
+    #    new_coor_set = []
+    #    for coor in self._coor_set:
+    #        ligand.coor[:] = coor
+    #        rotator = GlobalRotator(self.ligand)
+    #        for rotmat in rotation_set:
+    #            rotator(rotmat)
+    #            new_coor_set.append(ligand.coor.copy())
+    #    self._coor_set = new_coor_set
+
+    #    iterator = itertools.product(
+    #            np.linspace(-0.2, 0.2, 5, endpoint=True), repeat=3)
+    #    for trans in iterator:
+
+
 
     def _local_search(self):
         """Perform a local rigid body search on the cluster."""
@@ -174,6 +206,9 @@ class HierarchicalBuilder(object):
                         if not self._clashing():
                             new_coor_set.append(self.ligand.coor.copy())
                 self._coor_set = new_coor_set
+                # Check if any acceptable configurations have been created.
+                if not self._coor_set:
+                    return
 
                 # Perform an MIQP if either the end bond index has been reached
                 # or if the end of a sidechain has been reached, i.e. if the
