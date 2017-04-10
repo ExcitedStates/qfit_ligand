@@ -217,6 +217,7 @@ class HierarchicalBuilder(object):
                     end_sidechain = depths[bond_index] >= depths[bond_index + 1]
                 except IndexError:
                     finished_building = True
+                    end_sidechain = True
                 if end_iteration or end_sidechain:
                     self._iteration += 1
                     self._convert()
