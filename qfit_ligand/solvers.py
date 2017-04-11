@@ -3,6 +3,9 @@ from __future__ import division
 import numpy as np
 import cvxopt
 cvxopt.solvers.options['show_progress'] = False
+cvxopt.solvers.options['abstol'] = 1e-8
+cvxopt.solvers.options['reltol'] = 1e-7
+cvxopt.solvers.options['feastol'] = 1e-8
 import cplex
 
 
@@ -93,7 +96,7 @@ class MIQPSolver(object):
 
         self.initialized = True
 
-    def __call__(self, maxfits=None, threshold=None):
+    def __call__(self, maxfits=None, exact=False, threshold=None):
 
         if not self.initialized:
             self.initialize()
@@ -113,9 +116,13 @@ class MIQPSolver(object):
             for j in xrange(i, self._nconformers):
                 miqp.objective.set_quadratic_coefficients(i, j, self._quad_obj[i,j])
             miqp.objective.set_linear(i, self._lin_obj[i])
+
         # Sum of weights is <= 1
+        ind = range(self._nconformers)
+        val = [1] * self._nconformers
+        lin_expr = [cplex.SparsePair(ind=ind, val=val)]
         miqp.linear_constraints.add(
-                lin_expr=[[range(self._nconformers), self._nconformers * [1]]],
+                lin_expr=lin_expr,
                 rhs=[1],
                 senses=["L"],
                 )
@@ -145,13 +152,18 @@ class MIQPSolver(object):
                             )
             # Set the cardinality constraint
             if maxfits not in (None, 0):
+                senses = "L"
+                if exact:
+                    senses = "E"
+                    maxfits = min(maxfits, self._nconformers)
                 miqp.linear_constraints.add(
                         lin_expr=[[range(self._nconformers, 2 * self._nconformers), 
                                    self._nconformers * [1]]],
                         rhs=[maxfits],
-                        senses="L",
+                        senses=senses,
                         )
         miqp.solve()
+
         self.weights = np.asarray(miqp.solution.get_values()[:self._nconformers])
         self.occupancies = self.weights / self.weights.sum()
         miqp.end()
