@@ -196,7 +196,7 @@ static PyObject *mask_points(PyObject *dummy, PyObject *args)
 
     // Get pointers to arrays and shape info.
     double *points = (double *) PyArray_DATA(py_points);
-    double *occupancies = (double *) PyArray_DATA(py_lmax);
+    double *occupancies = (double *) PyArray_DATA(py_occupancies);
     double *lmax = (double *) PyArray_DATA(py_lmax);
     double *grid_to_cartesian = (double *) PyArray_DATA(py_grid_to_cartesian);
     double *out = (double *) PyArray_DATA(py_out);
