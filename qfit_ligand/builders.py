@@ -1,7 +1,4 @@
 from __future__ import division
-import subprocess
-import glob
-import os
 import itertools
 import logging
 logger = logging.getLogger(__name__)
@@ -20,19 +17,21 @@ class HierarchicalBuilder(object):
 
     """Build a multi-conformer ligand hierarchically."""
 
-    def __init__(self, ligand, xmap, resolution, receptor=None, global_search=True,
-            local_search=True, stepsize=20, build_stepsize=2, directory='.', 
-            clean=True, roots=None):
+    def __init__(self, ligand, xmap, resolution, receptor=None, 
+            global_search=False, local_search=True, build=True,
+            stepsize=2, build_stepsize=1, scale=True,
+            directory='.', roots=None):
         self.ligand = ligand
+        self.xmap = xmap
+        self.resolution = resolution
+        self.build = build
         self.stepsize= stepsize
         self.build_stepsize = build_stepsize
         self.directory = directory
-        self.xmap = Volume.fromfile(xmap)
-        self.resolution = resolution
         self.global_search = global_search
         self.local_search = local_search
-        self.clean = clean
         self.receptor = receptor
+        self.scale = scale
         if self.resolution < 3.0:
             self._rmask = 0.7 + (self.resolution - 0.6) / 3.0
         else:
@@ -55,7 +54,8 @@ class HierarchicalBuilder(object):
                 for cluster in self._rigid_clusters:
                     if root in cluster:
                         self._clusters_to_sample.append(cluster)
-        logger.info("Number of clusters to sample: {:}".format(len(self._clusters_to_sample)))
+        msg = "Number of clusters to sample: {:}".format(len(self._clusters_to_sample))
+        logger.info(msg)
         self._starting_coor_set = [ligand.coor.copy()]
         self._coor_set = []
         self._all_coor_set = []
@@ -70,35 +70,23 @@ class HierarchicalBuilder(object):
 
     def __call__(self):
 
-        #if self.global_search:
-        #    self._coor_set = list(self._starting_coor_set)
-        #    self._global_search()
-        #    self._convert()
-        #    self._QP()
-        #    self._update_conformers()
-        #    self._convert()
-        #    self._MIQP()
-        #    self._update_conformers()
-        #    self._all_coor_set += self._coor_set
-
-        for self._cluster_index, self._cluster in enumerate(self._clusters_to_sample):
-            self._iteration = 0
-            self._coor_set = list(self._starting_coor_set)
-            logger.info("Cluster index: {:}".format(self._cluster_index))
-            logger.info("Iteration: {:}".format(self._iteration))
-            logger.info("Number of conformers: {:}".format(len(self._coor_set)))
-            if self.local_search:
-                self._local_search()
-                self._convert()
-                self._QP()
-                self._update_conformers()
-                self._convert()
-                self._MIQP()
-                self._update_conformers()
-            self._build_ligand()
+        if self.global_search:
+            self._global_search()
             self._all_coor_set += self._coor_set
-            logger.info("Number of conformers: {:}".format(len(self._coor_set)))
-            logger.info("Number of final conformers: {:}".format(len(self._all_coor_set)))
+
+        if self.build:
+            for self._cluster_index, self._cluster in enumerate(self._clusters_to_sample):
+                self._iteration = 0
+                self._coor_set = list(self._starting_coor_set)
+                logger.info("Cluster index: {:}".format(self._cluster_index))
+                logger.info("Number of conformers: {:}".format(len(self._coor_set)))
+                if self.local_search:
+                    self._local_search()
+                self._build_ligand()
+
+                self._all_coor_set += self._coor_set
+                logger.info("Number of conformers: {:}".format(len(self._coor_set)))
+                logger.info("Number of final conformers: {:}".format(len(self._all_coor_set)))
 
         self._coor_set = self._all_coor_set
         self._cluster_index += 1
@@ -107,12 +95,6 @@ class HierarchicalBuilder(object):
         self._QP()
         self._update_conformers()
         self._convert()
-        self._MIQP()
-        self._update_conformers()
-
-        self._write_results()
-        if self.clean:
-            self._clean()
 
     def _clashing(self):
         if self.receptor is None:
@@ -120,24 +102,39 @@ class HierarchicalBuilder(object):
         else:
             return self.ligand.clashes() or self._cd() != 0
 
-    #def _global_search(self):
-    #    logger.info("Performing global search.")
+    def _global_search(self):
+        logger.info("Performing global search.")
 
-    #    rotation_set = RotationSets.get_set(20)
-    #    new_coor_set = []
-    #    for coor in self._coor_set:
-    #        ligand.coor[:] = coor
-    #        rotator = GlobalRotator(self.ligand)
-    #        for rotmat in rotation_set:
-    #            rotator(rotmat)
-    #            new_coor_set.append(ligand.coor.copy())
-    #    self._coor_set = new_coor_set
-
-    #    iterator = itertools.product(
-    #            np.linspace(-0.2, 0.2, 5, endpoint=True), repeat=3)
-    #    for trans in iterator:
-
-
+        rotation_set = RotationSets.get_set(20)
+        self._new_coor_set = []
+        for coor in self._starting_coor_set:
+            ligand.coor[:] = coor
+            rotator = GlobalRotator(self.ligand)
+            for rotmat in rotation_set:
+                rotator(rotmat)
+                translator = Translator(self.ligand)
+                iterator = itertools.product(
+                    np.linspace(-0.2, 0.2, 5, endpoint=True), repeat=3)
+                self._coor_set = []
+                for translation in iterator:
+                    translator(translation)
+                    if not self._clashing():
+                        self._coor_set.append(ligand.coor.copy())
+                if not self._coor_set:
+                    continue
+                self._convert()
+                self._QP()
+                self._update_conformers()
+                self._convert()
+                self._MIQP()
+                self._update_conformers()
+                self._new_coor_set += self._coor_set
+        self._coor_set = self._new_coor_set
+        self._convert()
+        self._QP()
+        self._update_conformers()
+        self._convert()
+        self._MIQP()
 
     def _local_search(self):
         """Perform a local rigid body search on the cluster."""
@@ -150,7 +147,7 @@ class HierarchicalBuilder(object):
         self.ligand.q[self._cluster] = 1
         for atom in self._cluster:
             self.ligand.q[self.ligand.connectivity()[atom]] = 1
-        center = self.ligand.coor[self._cluster].mean()
+        center = self.ligand.coor[self._cluster].mean(axis=0)
         new_coor_set = []
         for coor in self._coor_set:
             self.ligand.coor[:] = coor
@@ -164,7 +161,14 @@ class HierarchicalBuilder(object):
                         translator(translation)
                         if not self._clashing():
                             new_coor_set.append(self.ligand.coor.copy())
+        self._write_intermediate_structures(base='local')
         self._coor_set = new_coor_set
+        self._convert()
+        self._QP()
+        self._update_conformers()
+        self._convert()
+        self._MIQP()
+        self._update_conformers()
 
     def _build_ligand(self):
         """Build up the ligand hierarchically."""
@@ -205,8 +209,9 @@ class HierarchicalBuilder(object):
                 self._coor_set = new_coor_set
                 # Check if any acceptable configurations have been created.
                 if not self._coor_set:
+                    msg = "No non-clashing conformers found. Stop building."
+                    logger.warning(msg)
                     return
-                #self._write_intermediate_structures()
 
                 # Perform an MIQP if either the end bond index has been reached
                 # or if the end of a sidechain has been reached, i.e. if the
@@ -220,12 +225,15 @@ class HierarchicalBuilder(object):
                     end_sidechain = True
                 if end_iteration or end_sidechain:
                     self._iteration += 1
+                    #self._write_intermediate_structures()
                     self._convert()
                     self._QP()
                     self._update_conformers()
+                    #self._write_intermediate_structures('qp')
                     self._convert()
                     self._MIQP()
                     self._update_conformers()
+                    #self._write_intermediate_structures('miqp')
 
                     # Stop this building iteration and move on to next
                     starting_bond_index += 1
@@ -254,7 +262,7 @@ class HierarchicalBuilder(object):
 
     def _QP(self):
         print 'QP'
-        qpsolver = QPSolver(self._target, self._models)
+        qpsolver = QPSolver(self._target, self._models, scale=self.scale)
         print 'Initializing'
         qpsolver.initialize()
         print 'Solving'
@@ -262,21 +270,20 @@ class HierarchicalBuilder(object):
         self._occupancies = qpsolver.occupancies
         print 'Done'
 
-    def _MIQP(self):
+    def _MIQP(self, maxfits=5, exact=False, threshold=0):
         print 'MIQP'
-        miqpsolver = MIQPSolver(self._target, self._models)
+        miqpsolver = MIQPSolver(self._target, self._models, scale=self.scale)
         print 'Initializing'
         miqpsolver.initialize()
         print 'Solving'
-        miqpsolver(maxfits=5)
+        miqpsolver(maxfits=maxfits, exact=exact, threshold=threshold)
         self._occupancies = miqpsolver.occupancies
         print 'Done'
 
     def _update_conformers(self):
         print 'Number of conformers before: ', len(self._coor_set)
         new_coor_set = []
-        #cutoff = min(1 / len(self._coor_set), 0.01)
-        cutoff = 1e-4
+        cutoff = 0.002
         for n, coor in enumerate(self._coor_set):
             if self._occupancies[n] >= cutoff:
                 new_coor_set.append(coor)
@@ -284,23 +291,21 @@ class HierarchicalBuilder(object):
         self._occupancies = self._occupancies[self._occupancies >= cutoff]
         print 'Number of conformers: ', len(self._coor_set)
 
-    def _write_intermediate_structures(self):
-        fname_base = self._djoiner('intermediate_{:d}_{:d}_{:d}.pdb')
+    def _write_intermediate_structures(self, base='intermediate'):
+        fname_base = self._djoiner(base + '_{:d}_{:d}_{:d}.pdb')
         for n, coor in enumerate(self._coor_set):
             self.ligand.coor[:] = coor
-            self.ligand.tofile(fname_base.format(self._cluster_index, self._iteration, n))
+            fname = fname_base.format(self._cluster_index, self._iteration, n)
+            self.ligand.tofile(fname)
 
-    def _write_results(self):
+    def write_results(self, base='conformer', cutoff=0.01):
         logger.info("Writing results to file.")
-        fname_base = self._djoiner('conformer_{:d}.pdb')
-        for n, (coor, occ) in enumerate(zip(self._coor_set, self._occupancies), start=1):
-            self.ligand.q.fill(occ)
-            self.ligand.coor[:] = coor
-            self.ligand.tofile(fname_base.format(n))
-
-    def _clean(self):
-        """Remove all files"""
-        logger.info("Removing files.")
-        files_to_remove = glob.glob(self._djoiner('_*'))
-        for fname in files_to_remove:
-            os.remove(fname)
+        fname_base = self._djoiner(base + '_{:d}.pdb')
+        iterator = itertools.izip(self._coor_set, self._occupancies)
+        n = 1
+        for coor, occ in iterator:
+            if occ >= cutoff:
+                self.ligand.q.fill(occ)
+                self.ligand.coor[:] = coor
+                self.ligand.tofile(fname_base.format(n))
+                n += 1

@@ -12,7 +12,7 @@ class Transformer(object):
     """Transform a structure to a density."""
 
     def __init__(self, ligand, volume, smin=0, smax=0.5, rmax=3,
-                 rstep=0.001):
+                 rstep=0.01):
         self.ligand = ligand
         self.volume = volume
         self.smin = smin
