@@ -89,8 +89,6 @@ class HierarchicalBuilder(object):
                 logger.info("Number of final conformers: {:}".format(len(self._all_coor_set)))
 
         self._coor_set = self._all_coor_set
-        self._cluster_index += 1
-        self._iteration = 0
         self._convert()
         self._QP()
         self._update_conformers()
@@ -108,7 +106,7 @@ class HierarchicalBuilder(object):
         rotation_set = RotationSets.get_set(20)
         self._new_coor_set = []
         for coor in self._starting_coor_set:
-            ligand.coor[:] = coor
+            self.ligand.coor[:] = coor
             rotator = GlobalRotator(self.ligand)
             for rotmat in rotation_set:
                 rotator(rotmat)
@@ -119,7 +117,7 @@ class HierarchicalBuilder(object):
                 for translation in iterator:
                     translator(translation)
                     if not self._clashing():
-                        self._coor_set.append(ligand.coor.copy())
+                        self._coor_set.append(self.ligand.coor.copy())
                 if not self._coor_set:
                     continue
                 self._convert()
