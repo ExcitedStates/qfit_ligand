@@ -107,7 +107,7 @@ class Ligand(Structure):
             dist_matrix = sp_squareform(sp_pdist(self.coor))
             covrad = self.covalent_radius
             cutoff_matrix = np.repeat(covrad, self.natoms).reshape(self.natoms, self.natoms)
-            cutoff_matrix = cutoff_matrix + cutoff_matrix.T + 0.5
+            cutoff_matrix = cutoff_matrix + cutoff_matrix.T + 0.7
             connectivity_matrix = (dist_matrix < cutoff_matrix)
             np.fill_diagonal(connectivity_matrix, False)
             self._connectivity = connectivity_matrix
