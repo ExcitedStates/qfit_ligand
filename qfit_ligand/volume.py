@@ -14,7 +14,7 @@ class Volume(object):
                  angles=(90, 90, 90), offset=(0, 0, 0)):
 
         self.array = array
-        if isinstance(voxelspacing, (int, long)):
+        if isinstance(voxelspacing, float):
             voxelspacing = tuple([voxelspacing] * 3)
         self.voxelspacing = voxelspacing
         self.origin = origin
