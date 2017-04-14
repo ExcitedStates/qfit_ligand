@@ -29,23 +29,23 @@ class Transformer(object):
         sin_gamma = np.sin(gamma)
         cos_alpha = np.cos(alpha)
         cos_beta = np.cos(beta)
-        c_to_z_ratio = np.sqrt(
+        omega = np.sqrt(
                 1 - cos_alpha * cos_alpha - cos_beta * cos_beta - cos_gamma * cos_gamma +
                 2 * cos_alpha * cos_beta * cos_gamma
-                ) / sin_gamma
+                )
 
         self.lattice_to_cartesian = np.asarray([
             [1, cos_gamma, cos_beta],
             [0, sin_gamma, (cos_alpha - cos_beta * cos_gamma) / sin_gamma],
-            [0,         0, c_to_z_ratio],
+            [0,         0, omega / sin_gamma],
             ])
         self.cartesian_to_lattice = np.asarray([
             [1, -cos_gamma / sin_gamma, 
-                (cos_alpha * cos_gamma - cos_beta) / (c_to_z_ratio * sin_gamma)],
+                (cos_alpha * cos_gamma - cos_beta) / (omega * sin_gamma)],
             [0, 1 / sin_gamma,
-                (cos_beta * cos_gamma - cos_alpha) / (c_to_z_ratio * sin_gamma)],
+                (cos_beta * cos_gamma - cos_alpha) / (omega * sin_gamma)],
             [0, 0,
-                sin_gamma / c_to_z_ratio],
+                sin_gamma / omega],
             ])
         self.grid_to_cartesian = self.lattice_to_cartesian * self.volume.voxelspacing
 
