@@ -40,7 +40,7 @@ class ClashDetector(object):
                 self.ligand.q > 0, self.natoms
                 ).reshape(self.ligand.natoms, self.natoms)
         clash_matrix = dist_matrix < self.cutoff_matrix
-        clashes = clash_matrix[mask].sum() / 2.0
+        clashes = clash_matrix[mask].sum()
         return clashes
 
 
