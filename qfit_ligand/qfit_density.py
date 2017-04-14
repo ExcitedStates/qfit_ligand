@@ -1,6 +1,7 @@
 from __future__ import division
 
 import argparse
+import os
 
 from .volume import Volume
 from .structure import Structure
