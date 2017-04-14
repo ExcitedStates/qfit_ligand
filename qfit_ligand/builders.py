@@ -43,6 +43,8 @@ class HierarchicalBuilder(object):
 
         if self.receptor is not None:
             self._cd = ClashDetector(self.ligand, self.receptor, 0.75)
+            if self._cd() > 0:
+                logger.warning("Initial ligand configuration is clashing!")
 
         self._rigid_clusters = self.ligand.rigid_clusters()
         if roots is None:
@@ -159,8 +161,11 @@ class HierarchicalBuilder(object):
                         translator(translation)
                         if not self._clashing():
                             new_coor_set.append(self.ligand.coor.copy())
-        self._write_intermediate_structures(base='local')
         self._coor_set = new_coor_set
+        # In case all conformers were clashing
+        if not self._coor_set:
+            return
+        #self._write_intermediate_structures(base='local')
         self._convert()
         self._QP()
         self._update_conformers()
@@ -285,8 +290,18 @@ class HierarchicalBuilder(object):
         for n, coor in enumerate(self._coor_set):
             if self._occupancies[n] >= cutoff:
                 new_coor_set.append(coor)
-        self._coor_set = new_coor_set
-        self._occupancies = self._occupancies[self._occupancies >= cutoff]
+        if new_coor_set:
+            self._coor_set = new_coor_set
+            self._occupancies = self._occupancies[self._occupancies >= cutoff]
+        else:
+            logger.warning("No conformer found with occupancy bigger than {:}.".format(cutoff))
+            sorted_indices = np.argsort(self._occupancies)[::-1]
+            indices = np.arange(len(self._occupancies))[sorted_indices]
+            nbest = min(100, len(self._occupancies))
+            for i in indices[:nbest]:
+                new_coor_set.append(self._coor_set[i])
+            self._coor_set = new_coor_set
+            self._occupancies = self._occupancies[indices[:nbest]]
         print 'Number of conformers: ', len(self._coor_set)
 
     def _write_intermediate_structures(self, base='intermediate'):
