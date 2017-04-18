@@ -72,6 +72,11 @@ def main():
             directory=args.directory, scale=(not args.no_scale),
             )
     builder()
+
+    builder._MIQP(maxfits=5, exact=False)
+    base = 'conformer'
+    builder.write_results(base=base)
+
     nmax = min(len(builder._coor_set) + 1, 6)
     for n in xrange(1, nmax):
         builder._MIQP(maxfits=n, exact=True)

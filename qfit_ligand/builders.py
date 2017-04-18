@@ -113,8 +113,9 @@ class HierarchicalBuilder(object):
             for rotmat in rotation_set:
                 rotator(rotmat)
                 translator = Translator(self.ligand)
+                translation_set = np.arange(-0.3, 0.3 + 0.1, 0.1)
                 iterator = itertools.product(
-                    np.linspace(-0.2, 0.2, 5, endpoint=True), repeat=3)
+                    translation_set, repeat=3)
                 self._coor_set = []
                 for translation in iterator:
                     translator(translation)
@@ -129,7 +130,19 @@ class HierarchicalBuilder(object):
                 self._MIQP()
                 self._update_conformers()
                 self._new_coor_set += self._coor_set
+                if len(self._new_coor_set) > 1000:
+                    self._coor_set = self._new_coor_set
+                    self._convert()
+                    self._QP()
+                    self._update_conformers()
+                    self._convert()
+                    self._MIQP()
+                    self._update_conformers()
+                    self._new_coor_set = self._coor_set
+
         self._coor_set = self._new_coor_set
+        if not self._coor_set:
+            return
         self._convert()
         self._QP()
         self._update_conformers()
