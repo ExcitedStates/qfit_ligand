@@ -23,39 +23,32 @@ class ClashDetector(object):
         keys = np.round(receptor.coor / self.voxelspacing)
         for key, coor, radius in itertools.izip(keys, receptor.coor, receptor_radius):
             key = tuple(key)
-            self.grid[key].append(coor)
-            self.radius[key].append(radius)
-
-        new_grid = {}
-        new_radius = {}
-        for key in self.grid.keys():
-            all_coor = []
-            all_radius = []
-            iterator = itertools.product(np.arange(-1, 1.1, 1), repeat=3)
+            iterator = itertools.product([-1, 0, 1], repeat=3)
             for trans in iterator:
                 new_key = tuple(x + tx for x, tx in itertools.izip(key, trans))
-                all_coor += self.grid[new_key]
-                all_radius += self.radius[new_key]
-            if all_coor == []:
-                continue
-            new_grid[key] = np.asarray(all_coor)
-            new_radius[key] = np.asarray(all_radius)
-        self.grid = new_grid
-        self.radius = new_radius
+                self.grid[new_key].append(coor)
+                self.radius[new_key].append(radius)
+        for key, value in self.grid.iteritems():
+            self.grid[key] = np.asarray(value)
+        for key, value in self.radius.iteritems():
+            self.radius[key] = np.asarray(value)
         self._keys = np.zeros_like(self.ligand.coor)
+        self.receptor = receptor
 
     def __call__(self):
         clashes = False
         np.round(self.ligand.coor / self.voxelspacing, out=self._keys)
         for key, coor, radius in itertools.izip(self._keys, self.ligand.coor, self.ligand_radius):
             key = tuple(key)
-            try:
-                coor2 = self.grid[key]
-            except KeyError:
+            coor2 = self.grid[key]
+            if coor2 == []:
                 continue
-            dist = np.linalg.norm(coor - coor2, axis=1)
+            dist2 = coor - coor2
+            dist2 *= dist2
             cutoff = self.scaling_factor * (radius + self.radius[key])
-            clashes = np.any(dist < cutoff)
+            cutoff *= cutoff
+            clashes = np.any(dist2.sum(axis=1) < cutoff)
+
             if clashes:
                 break
         return clashes
