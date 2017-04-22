@@ -99,29 +99,27 @@ def main():
     # Sample translations
     if args.translate is not None:
         new_coor_set = []
-        translation_set = np.arange(-args.translate, args.translate + 0.1, 0.1)
+        trans = np.arange(-args.translate, args.translate + 0.1, 0.1)
+        translation_set = list(itertools.product(trans, repeat=3))
         print 'Translations sampled: ', translation_set.size ** 3
         for coor in coor_set:
             ligand.coor[:] = coor
             translator = Translator(ligand)
-            for x in  translation_set:
-                for y in translation_set:
-                    for z in translation_set:
-                        translator((x, y , z))
-                        new_coor_set.append(translator.ligand.coor.copy())
+            for trans in translation_set:
+                translator(trans)
+                new_coor_set.append(translator.ligand.coor.copy())
         coor_set = new_coor_set
 
     # Write out ligands to file
     if args.receptor is not None:
         cd = ClashDetector(ligand, receptor, 0.75)
-
     n = 1
     for coor in coor_set:
         ligand.coor[:] = coor
         if args.receptor is not None:
-            not_clashing = cd() == 0 and not ligand.clashes()
+            clashing = cd() or ligand.clashes()
         else:
-            not_clashing = not ligand.clashes()
-        if not_clashing:
+            clashing = ligand.clashes()
+        if not clashing:
             ligand.tofile(os.path.join(args.directory, 'ligand_{:d}.pdb'.format(n)))
             n += 1

@@ -1,4 +1,6 @@
 import os.path
+from collections import defaultdict
+import itertools
 
 import numpy as np
 from scipy.spatial.distance import cdist as sp_cdist
@@ -6,41 +8,56 @@ from scipy.spatial.distance import cdist as sp_cdist
 
 class ClashDetector(object):
 
-    """Detect clashes between ligand and receptor."""
+    """Detect clashes between ligand and receptor using spatial hashing."""
 
     def __init__(self, ligand, receptor, scaling_factor=1.0):
 
         self.ligand = ligand
-        # Determine box size
-        center = self.ligand.coor.mean(axis=0)
-        longest_distance = np.linalg.norm(
-                self.ligand.coor - center, axis=1
-                ).max()
-        left_bottom = center - longest_distance - 2
-        right_top = center + longest_distance + 2
-        receptor_index = np.all(
-                (receptor.coor >= left_bottom) & (receptor.coor <= right_top),
-                axis=1)
-        self.receptor_coor = receptor.coor[receptor_index]
-        self.natoms = self.receptor_coor.shape[0]
+        self.scaling_factor = scaling_factor
+        receptor_radius = receptor.covalent_radius
+        self.ligand_radius = self.ligand.covalent_radius
+        self.voxelspacing = self.scaling_factor * (receptor_radius.max() + self.ligand_radius.max())
 
-        ligand_covrad = ligand.covalent_radius
-        receptor_covrad = receptor.covalent_radius[receptor_index]
-        cutoff_matrix = np.repeat(
-                ligand_covrad, self.natoms
-                ).reshape(ligand.natoms, self.natoms)
-        cutoff_matrix += np.repeat(
-                receptor_covrad, ligand.natoms
-                ).reshape(self.natoms, ligand.natoms).T
-        self.cutoff_matrix = cutoff_matrix * scaling_factor
+        self.grid = defaultdict(list)
+        self.radius = defaultdict(list)
+        keys = np.round(receptor.coor / self.voxelspacing)
+        for key, coor, radius in itertools.izip(keys, receptor.coor, receptor_radius):
+            key = tuple(key)
+            self.grid[key].append(coor)
+            self.radius[key].append(radius)
+
+        new_grid = {}
+        new_radius = {}
+        for key in self.grid.keys():
+            all_coor = []
+            all_radius = []
+            iterator = itertools.product(np.arange(-1, 1.1, 1), repeat=3)
+            for trans in iterator:
+                new_key = tuple(x + tx for x, tx in itertools.izip(key, trans))
+                all_coor += self.grid[new_key]
+                all_radius += self.radius[new_key]
+            if all_coor == []:
+                continue
+            new_grid[key] = np.asarray(all_coor)
+            new_radius[key] = np.asarray(all_radius)
+        self.grid = new_grid
+        self.radius = new_radius
+        self._keys = np.zeros_like(self.ligand.coor)
 
     def __call__(self):
-        dist_matrix = sp_cdist(self.ligand.coor, self.receptor_coor)
-        mask = np.repeat(
-                self.ligand.q > 0, self.natoms
-                ).reshape(self.ligand.natoms, self.natoms)
-        clash_matrix = dist_matrix < self.cutoff_matrix
-        clashes = clash_matrix[mask].sum()
+        clashes = False
+        np.round(self.ligand.coor / self.voxelspacing, out=self._keys)
+        for key, coor, radius in itertools.izip(self._keys, self.ligand.coor, self.ligand_radius):
+            key = tuple(key)
+            try:
+                coor2 = self.grid[key]
+            except KeyError:
+                continue
+            dist = np.linalg.norm(coor - coor2, axis=1)
+            cutoff = self.scaling_factor * (radius + self.radius[key])
+            clashes = np.any(dist < cutoff)
+            if clashes:
+                break
         return clashes
 
 

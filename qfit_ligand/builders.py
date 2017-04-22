@@ -43,7 +43,7 @@ class HierarchicalBuilder(object):
 
         if self.receptor is not None:
             self._cd = ClashDetector(self.ligand, self.receptor, 0.75)
-            if self._cd() > 0:
+            if self._cd():
                 logger.warning("Initial ligand configuration is clashing!")
 
         self._rigid_clusters = self.ligand.rigid_clusters()
@@ -100,7 +100,7 @@ class HierarchicalBuilder(object):
         if self.receptor is None:
             return self.ligand.clashes()
         else:
-            return self.ligand.clashes() or self._cd() != 0
+            return self.ligand.clashes() or self._cd()
 
     def _global_search(self):
         logger.info("Performing global search.")
