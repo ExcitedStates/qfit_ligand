@@ -14,6 +14,7 @@ def parse_args():
             help=("Output ccp4 file name containing density in P1. "
                   "Default is adding _p1.ccp4 to mtz base filename.")
             )
+    p.add_argument("--label", type=str, default="FWT,PHWT")
     args = p.parse_args()
     return args
 
@@ -28,16 +29,20 @@ def main():
     # Expand reflections to P1
     mtz_p1_fname = mtz_fname_prefix + '_p1.mtz'
     cmd = [os.path.join(CCTBX_BINDIR, 'phenix.reflection_file_converter'),
-           '--expand-to-p1', '--change_to_space_group=P1', '--label=FWT,PHWT',
+            '--expand-to-p1', '--change_to_space_group=P1', 
+            '--label={:}'.format(args.label),
            '--mtz={:}'.format(mtz_p1_fname), mtz_fname]
     subprocess.call(cmd)
 
     # Convert MTZ to CCP4
     cmd = [os.path.join(CCTBX_BINDIR, 'phenix.mtz2map'), mtz_p1_fname]
+    if 'FMODEL' in args.label:
+        cmd.append("include_fmodel=True")
+    print ' '.join(cmd)
     subprocess.call(cmd)
     # Rename the output file, since a lame '_1' is added.
     ccp4_fname_prefix = os.path.split(mtz_fname_prefix)[1]
-    ccp4_fname_init = ccp4_fname_prefix + '_p1_1.ccp4'
+    ccp4_fname_init = ccp4_fname_prefix + '_p1_fmodel.ccp4'
     if args.outfile is None:
         ccp4_fname_final = ccp4_fname_prefix + '_p1.ccp4'
     else:
