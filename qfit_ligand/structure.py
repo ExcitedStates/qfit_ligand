@@ -20,25 +20,29 @@ class Structure(object):
              ('e', np.str_, 2), ('charge', np.str_, 2),
              ]
 
-    def __init__(self, dd):
-        self.natoms = len(dd['atomid'])
-        self.data = np.zeros(self.natoms, dtype=self.dtype)
-        for attr in self.attributes:
-            if attr not in list('xyz'):
-                self.data[attr] = dd[attr]
-                setattr(self, attr, self.data[attr])
-        # Make the coordinates a separate array as they will be changed a lot
-        # together.
-        self.coor = np.asarray(zip(dd['x'], dd['y'], dd['z']), dtype=np.float64)
+    def __init__(self, data, coor):
+        self.natoms = data['atomid'].size
+        self.data = data
+        self.coor = coor
         self.x = self.coor[:, 0]
         self.y = self.coor[:, 1]
         self.z = self.coor[:, 2]
+        for attr in self.attributes:
+            if attr not in list('xyz'):
+                setattr(self, attr, data[attr])
         self._connectivity = None
 
     @classmethod
     def fromfile(cls, fname):
         dd = PDBFile.read(fname).coor
-        return cls(dd)
+        natoms = len(dd['atomid'])
+        data = np.zeros(natoms, dtype=cls.dtype)
+        for attr in cls.attributes:
+            if attr not in list('xyz'):
+                data[attr] = dd[attr]
+        # Make the coordinates a separate array as they will be changed a lot
+        coor = np.asarray(zip(dd['x'], dd['y'], dd['z']), dtype=np.float64)
+        return cls(data, coor)
 
     def tofile(self, fname):
         PDBFile.write(fname, self)
@@ -77,7 +81,7 @@ class Structure(object):
         if return_ind:
             return selection
         else:
-            return Structure(self.data[selection])
+            return Structure(self.data[selection], self.coor[selection])
 
     def _get_property(self, ptype):
         elements, ind = np.unique(self.data['e'], return_inverse=True)
