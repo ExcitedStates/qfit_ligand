@@ -3,7 +3,6 @@ from collections import defaultdict
 import itertools
 
 import numpy as np
-from scipy.spatial.distance import cdist as sp_cdist
 
 
 class ClashDetector(object):
@@ -58,10 +57,10 @@ class Translator(object):
 
     def __init__(self, ligand):
         self.ligand = ligand
-        self.coor_to_rotate = self.ligand.coor.copy()
+        self.coor_to_translate = self.ligand.coor.copy()
 
     def __call__(self, trans):
-        self.ligand.coor[:] = self.coor_to_rotate + np.asarray(trans)
+        self.ligand.coor[:] = self.coor_to_translate + np.asarray(trans)
 
 
 class GlobalRotator(object):

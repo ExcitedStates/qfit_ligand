@@ -50,8 +50,8 @@ def main():
 
     args = parse_args()
     mkdir_p(args.directory)
-    logging.basicConfig(filename=os.path.join(args.directory, 'qfit_ligand.log'), 
-                        level=logging.INFO)
+    logging_fname = os.path.join(args.directory, 'qfit_ligand.log') 
+    logging.basicConfig(filename=logging_fname, level=logging.INFO)
     if args.verbose:
         console_out = logging.StreamHandler(stream=sys.stdout)
         console_out.setLevel(logging.INFO)
@@ -68,7 +68,8 @@ def main():
     builder = HierarchicalBuilder(
             ligand, xmap, args.resolution, receptor=receptor, 
             build=(not args.no_build), build_stepsize=args.build_stepsize, 
-            stepsize=args.stepsize, global_search=args.global_search, local_search=(not args.no_local), 
+            stepsize=args.stepsize, global_search=args.global_search, 
+            local_search=(not args.no_local), 
             directory=args.directory, scale=(not args.no_scale),
             )
     builder()

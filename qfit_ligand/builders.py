@@ -37,7 +37,7 @@ class HierarchicalBuilder(object):
         else:
             self._rmask = 0.5 * self.resolution
 
-        self._trans_box = [(-0.2, 0.21, 0.1), (-0.2, 0.21, 0.1), (-0.2, 0.21, 0.1)]
+        self._trans_box = [(-0.2, 0.21, 0.1)] * 3
         self._sampling_range = np.deg2rad(np.arange(0, 360, self.stepsize))
         self._djoiner = DJoiner(directory)
 
@@ -56,7 +56,8 @@ class HierarchicalBuilder(object):
                 for cluster in self._rigid_clusters:
                     if root in cluster:
                         self._clusters_to_sample.append(cluster)
-        msg = "Number of clusters to sample: {:}".format(len(self._clusters_to_sample))
+        msg = "Number of clusters to sample: {:}".format(
+                len(self._clusters_to_sample))
         logger.info(msg)
         self._starting_coor_set = [ligand.coor.copy()]
         self._coor_set = []
@@ -67,7 +68,8 @@ class HierarchicalBuilder(object):
         # Initialize density creation
         smax = 1 / (2 * self.resolution)
         model_map = Volume.zeros_like(self.xmap)
-        self._transformer = Transformer(self.ligand, model_map, smax=smax, rmax=3)
+        self._transformer = Transformer(self.ligand, model_map, 
+                smax=smax, rmax=3)
 
 
     def __call__(self):
@@ -310,7 +312,7 @@ class HierarchicalBuilder(object):
             logger.warning("No conformer found with occupancy bigger than {:}.".format(cutoff))
             sorted_indices = np.argsort(self._occupancies)[::-1]
             indices = np.arange(len(self._occupancies))[sorted_indices]
-            nbest = min(100, len(self._occupancies))
+            nbest = min(5, len(self._occupancies))
             for i in indices[:nbest]:
                 new_coor_set.append(self._coor_set[i])
             self._coor_set = new_coor_set
