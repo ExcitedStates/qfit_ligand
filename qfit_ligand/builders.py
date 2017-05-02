@@ -197,10 +197,12 @@ class HierarchicalBuilder(object):
         bonds = bond_order.order
         depths = bond_order.depth
         nbonds = len(bonds)
+        logger.info("Number of bonds to sample: {:d}".format(nbonds))
         starting_bond_index = 0
         finished_building = True if nbonds == 0 else False
         while not finished_building:
             end_bond_index = min(starting_bond_index + self.build_stepsize, nbonds)
+            logger.info("Sampling iteration: {:d}".format(self._iteration))
             for bond_index in xrange(starting_bond_index, end_bond_index):
                 # Set the occupancies of build clusters and their direct
                 # neighbors to 1 for clash detection and MIQP.
@@ -261,7 +263,7 @@ class HierarchicalBuilder(object):
 
     def _convert(self):
 
-        print 'Converting to densities ({:})'.format(len(self._coor_set))
+        logger.info('Converting structures to densities ({:})'.format(len(self._coor_set)))
         self._transformer.volume.array.fill(0)
         for coor in self._coor_set:
             self.ligand.coor[:] = coor
@@ -279,27 +281,26 @@ class HierarchicalBuilder(object):
             self._transformer.reset()
 
     def _QP(self):
-        print 'QP'
+        logger.info("Starting QP.")
         qpsolver = QPSolver(self._target, self._models, scale=self.scale)
-        print 'Initializing'
+        logger.info("Initializing.")
         qpsolver.initialize()
-        print 'Solving'
+        logger.info("Solving")
         qpsolver()
         self._occupancies = qpsolver.occupancies
-        print 'Done'
 
     def _MIQP(self, maxfits=5, exact=False, threshold=0):
-        print 'MIQP'
+        logger.info("Starting MIQP.")
         miqpsolver = MIQPSolver(self._target, self._models, scale=self.scale)
-        print 'Initializing'
+        logger.info("Initializing.")
         miqpsolver.initialize()
-        print 'Solving'
+        logger.info("Solving")
         miqpsolver(maxfits=maxfits, exact=exact, threshold=threshold)
         self._occupancies = miqpsolver.occupancies
-        print 'Done'
 
     def _update_conformers(self):
-        print 'Number of conformers before: ', len(self._coor_set)
+        logger.info("Updating conformer list.")
+        logger.info("Old number of conformers: {:d}".format(len(self._coor_set)))
         new_coor_set = []
         cutoff = 0.002
         for n, coor in enumerate(self._coor_set):
@@ -317,9 +318,10 @@ class HierarchicalBuilder(object):
                 new_coor_set.append(self._coor_set[i])
             self._coor_set = new_coor_set
             self._occupancies = self._occupancies[indices[:nbest]]
-        print 'Number of conformers: ', len(self._coor_set)
+        logger.info("New number of conformers: {:d}".format(len(self._coor_set)))
 
     def _write_intermediate_structures(self, base='intermediate'):
+        logger.info("Writing intermediate structures to file.")
         fname_base = self._djoiner(base + '_{:d}_{:d}_{:d}.pdb')
         for n, coor in enumerate(self._coor_set):
             self.ligand.coor[:] = coor
