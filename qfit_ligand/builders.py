@@ -68,9 +68,35 @@ class HierarchicalBuilder(object):
         # Initialize density creation
         smax = 1 / (2 * self.resolution)
         model_map = Volume.zeros_like(self.xmap)
+        # Scale the experimental density using a scaling factor under the
+        # footprint of the receptor if given.
+        if self.scale and self.receptor is not None:
+            logger.info("Scaling map")
+            transformer = Transformer(self.receptor, model_map, smax=smax,
+                    rmax=3)
+            transformer.mask(self._rmask)
+            mask = model_map.array > 0
+            transformer.reset()
+            logger.info("Initializing")
+            transformer.initialize()
+            transformer.density()
+            xmap_masked = self.xmap.array[mask]
+            model_masked = model_map.array[mask]
+            model_masked_mean = model_masked.mean()
+            xmap_masked_mean = xmap_masked.mean()
+            model_masked -= model_masked_mean
+            xmap_masked -= xmap_masked_mean
+            scaling_factor = ((model_masked * xmap_masked).sum() /
+                    (xmap_masked * xmap_masked).sum())
+            logger.info("Scaling factor: {:.2f}".format(scaling_factor))
+            self.xmap.array -= xmap_masked_mean
+            self.xmap.array *= scaling_factor
+            self.xmap.array += model_masked_mean
+            self.scale = False
+            model_map.array.fill(0)
+
         self._transformer = Transformer(self.ligand, model_map, 
                 smax=smax, rmax=3)
-
 
     def __call__(self):
 
