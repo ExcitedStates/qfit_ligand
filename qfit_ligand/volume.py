@@ -217,8 +217,7 @@ def to_mrc(fid, volume, labels=[], fmt=None):
         raise TypeError("Data type ({:})is not supported.".format(dtype))
 
     if fmt in ('ccp4', 'map'):
-        nxstart, nystart, nzstart = [int(round(x / vs)) 
-                for x, vs in zip(volume.origin, volume.voxelspacing)]
+        nxstart, nystart, nzstart = volume.offset
     else:
         nxstart, nystart, nzstart = [0, 0, 0]
 
