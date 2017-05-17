@@ -11,14 +11,15 @@ class Transformer(object):
 
     """Transform a structure to a density."""
 
-    def __init__(self, ligand, volume, smin=0, smax=0.5, rmax=3,
-                 rstep=0.01):
+    def __init__(self, ligand, volume, smin=0, smax=0.5, rmax=3.0,
+                 rstep=0.01, simple=False):
         self.ligand = ligand
         self.volume = volume
         self.smin = smin
         self.smax = smax
         self.rmax = rmax
         self.rstep = rstep
+        self.simple = simple
         self.asf = ATOM_STRUCTURE_FACTORS
         self._initialized = False
 
@@ -48,13 +49,18 @@ class Transformer(object):
                 sin_gamma / omega],
             ])
         self.grid_to_cartesian = self.lattice_to_cartesian * self.volume.voxelspacing
+        self._grid_coor = np.zeros_like(self.ligand.coor)
 
     def mask(self, rmax=None):
+        #transform = self.cartesian_to_lattice
+        #np.dot(self.ligand.coor - self.volume.origin, transform.T, out=self._grid_coor)
+        #self._grid_coor -= self.volume.offset
         transform = np.asmatrix(self.cartesian_to_lattice)
         self._grid_coor = ((transform * (self.ligand.coor - self.volume.origin).T).T 
                 / self.volume.voxelspacing - self.volume.offset)
         if rmax is None:
             rmax = self.rmax
+
         lmax = np.asarray(
                 [rmax / vs for vs in self.volume.voxelspacing],
                 dtype=np.float64)
@@ -65,6 +71,10 @@ class Transformer(object):
         transform = np.asmatrix(self.cartesian_to_lattice)
         self._grid_coor = ((transform * (self.ligand.coor - self.volume.origin).T).T 
                 / self.volume.voxelspacing - self.volume.offset)
+        #transform = self.cartesian_to_lattice
+        #np.dot(self.ligand.coor - self.volume.origin, transform.T, out=self._grid_coor)
+        #self._grid_coor /= self.volume.voxelspacing
+        #self._grid_coor -= self.volume.offset
         lmax = np.asarray(
                 [self.rmax / vs for vs in self.volume.voxelspacing],
                 dtype=np.float64)
@@ -74,7 +84,10 @@ class Transformer(object):
     def initialize(self):
         self.radial_densities = []
         for n in xrange(self.ligand.natoms):
-            rdens = self.radial_density(self.ligand.e[n], self.ligand.b[n])[1]
+            if self.simple:
+                rdens = self.simple_radial_density(self.ligand.e[n], self.ligand.b[n])[1]
+            else:
+                rdens = self.radial_density(self.ligand.e[n], self.ligand.b[n])[1]
             self.radial_densities.append(rdens)
         self.radial_densities = np.ascontiguousarray(self.radial_densities)
         self._initialized = True
@@ -88,6 +101,10 @@ class Transformer(object):
         transform = np.asmatrix(self.cartesian_to_lattice)
         self._grid_coor = ((transform * (self.ligand.coor - self.volume.origin).T).T 
                 / self.volume.voxelspacing - self.volume.offset)
+        #transform = self.cartesian_to_lattice
+        #np.dot(self.ligand.coor - self.volume.origin, transform.T, out=self._grid_coor)
+        #self._grid_coor /= self.volume.voxelspacing
+        #self._grid_coor -= self.volume.offset
         lmax = np.asarray(
                 [self.rmax / vs for vs in self.volume.voxelspacing],
                 dtype=np.float64)
@@ -95,6 +112,22 @@ class Transformer(object):
         dilate_points(self._grid_coor, self.ligand.q, lmax, 
                 self.radial_densities, self.rstep, self.rmax,
                 self.grid_to_cartesian, self.volume.array)
+
+    def simple_radial_density(self, element, bfactor):
+        """Calculate electron density as a function of radius."""
+
+        assert bfactor > 0, "B-factor should be bigger than 0"
+
+        asf = self.asf[element.capitalize()]
+        bw = [-4 * np.pi * np.pi / (asf[1][i] + bfactor) for i in xrange(6)]
+        aw = [asf[0][i] * (-bw[i] / np.pi) ** 1.5 for i in xrange(6)]
+        r = np.arange(0, self.rmax + self.rstep + 1, self.rstep)
+        r2 = r * r
+        density = (aw[0] * np.exp(bw[0] * r2) + aw[1] * np.exp(bw[1] * r2) + 
+                   aw[2] * np.exp(bw[2] * r2) + aw[3] * np.exp(bw[3] * r2) + 
+                   aw[4] * np.exp(bw[4] * r2) + aw[5] * np.exp(bw[5] * r2)
+                   )
+        return r, density
 
     def radial_density(self, element, bfactor):
         """Calculate electron density as a function of radius."""

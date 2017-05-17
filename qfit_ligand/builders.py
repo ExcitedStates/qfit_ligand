@@ -19,7 +19,7 @@ class HierarchicalBuilder(object):
 
     def __init__(self, ligand, xmap, resolution, receptor=None, 
             global_search=False, local_search=True, build=True,
-            stepsize=2, build_stepsize=1, scale=True,
+            stepsize=2, build_stepsize=1, scale=True, threshold=None, cardinality=5,
             directory='.', roots=None):
         self.ligand = ligand
         self.xmap = xmap
@@ -37,6 +37,10 @@ class HierarchicalBuilder(object):
         else:
             self._rmask = 0.5 * self.resolution
 
+        # For MIQP
+        self.threshold = threshold
+        self.cardinality = cardinality
+
         self._trans_box = [(-0.2, 0.21, 0.1)] * 3
         self._sampling_range = np.deg2rad(np.arange(0, 360, self.stepsize))
         self._djoiner = DJoiner(directory)
@@ -48,8 +52,11 @@ class HierarchicalBuilder(object):
 
         self._rigid_clusters = self.ligand.rigid_clusters()
         if roots is None:
-            self._clusters_to_sample = [
-                    cluster for cluster in self._rigid_clusters if len(cluster) > 1]
+            self._clusters_to_sample = []
+            for cluster in self._rigid_clusters:
+                nhydrogen = (self.ligand.e[cluster] == 'H').sum()
+                if len(cluster) - nhydrogen > 1:
+                    self._clusters_to_sample.append(cluster)
         else:
             self._clusters_to_sample = []
             for root in roots:
@@ -72,8 +79,9 @@ class HierarchicalBuilder(object):
         # footprint of the receptor if given.
         if self.scale and self.receptor is not None:
             logger.info("Scaling map")
-            transformer = Transformer(self.receptor, model_map, smax=smax,
+            transformer = Transformer(self.receptor, model_map, simple=True,
                     rmax=3)
+            logger.info("Making mask.")
             transformer.mask(self._rmask)
             mask = model_map.array > 0
             transformer.reset()
@@ -315,13 +323,21 @@ class HierarchicalBuilder(object):
         qpsolver()
         self._occupancies = qpsolver.occupancies
 
-    def _MIQP(self, maxfits=5, exact=False, threshold=0):
+    def _MIQP(self, maxfits=None, exact=False, threshold=None):
         logger.info("Starting MIQP.")
         miqpsolver = MIQPSolver(self._target, self._models, scale=self.scale)
         logger.info("Initializing.")
         miqpsolver.initialize()
         logger.info("Solving")
-        miqpsolver(maxfits=maxfits, exact=exact, threshold=threshold)
+        if maxfits is None:
+            cardinality = self.cardinality
+        else:
+            cardinality = maxfits
+        if threshold is None:
+            threshold = self.threshold
+        else:
+            threshold = threshold
+        miqpsolver(maxfits=cardinality, exact=exact, threshold=threshold)
         self._occupancies = miqpsolver.occupancies
 
     def _update_conformers(self):

@@ -11,11 +11,12 @@ import cplex
 
 class QPSolver(object):
 
-    def __init__(self, target, models, scale=False):
+    def __init__(self, target, models, scale=False, normalize=False):
         self._target = target
         self._models = models
         self._nconformers = models.shape[0]
         self.initialized = False
+        self.normalize = normalize
 
         self.scale = scale
         self._solution = None
@@ -63,19 +64,22 @@ class QPSolver(object):
                 self._le_constraints, self._le_bounds
                 )
         self.weights = np.asarray(self._solution['x']).ravel()
-        self.occupancies = self.weights / self.weights.sum()
+        if self.normalize:
+            self.occupancies = self.weights / self.weights.sum()
+        else:
+            self.occupancies = self.weights.copy()
 
 
 class MIQPSolver(object):
 
     """Mixed Integer Quadratic Program based on CPLEX."""
 
-    def __init__(self, target, models, scale=False):
+    def __init__(self, target, models, scale=False, normalize=False):
         self._target = target
         self._models = models
         self._nconformers = models.shape[0]
         self.initialized = False
-
+        self.normalize = normalize
         self.scale = scale
 
     def initialize(self):
@@ -165,5 +169,9 @@ class MIQPSolver(object):
         miqp.solve()
 
         self.weights = np.asarray(miqp.solution.get_values()[:self._nconformers])
-        self.occupancies = self.weights / self.weights.sum()
+        if self.normalize:
+            self.occupancies = self.weights / self.weights.sum()
+        else:
+            self.occupancies = self.weights.copy()
+
         miqp.end()
