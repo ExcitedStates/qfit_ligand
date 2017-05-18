@@ -17,6 +17,8 @@ def parse_args():
             help="Resolution of electron density.")
     p.add_argument("structure", type=str,
             help="Structure to determine scaling factor.")
+    p.add_argument("-s", "--simple", action="store_true",
+            help="Make simple density to scale against.")
     p.add_argument("-o", "--output", type=str, default=None,
             help="Name of output file.")
 
@@ -40,7 +42,9 @@ def main():
         rmask = 0.7 + (args.resolution - 0.6) / 3.0
     else:
         rmask = 0.5 * args.resolution
-    transformer = Transformer(structure, model)
+    smax = 1.0 / (2 * args.resolution)
+    transformer = Transformer(structure, model, simple=args.simple,
+            smax=smax)
     print 'Creating mask'
     transformer.mask(rmask)
     mask = model.array > 0

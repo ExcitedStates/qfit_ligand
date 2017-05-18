@@ -17,6 +17,8 @@ def parse_args():
             help="CCP4 density with P1 symmetry.")
     p.add_argument('resolution', type=float,
             help="Resolution of map in angstrom.")
+    p.add_argument("-s", "--simple", action="store_true",
+            help="Produce simple density.")
     p.add_argument("-o", "--output", type=str, default=None,
             help="Name of output density.")
 
@@ -36,8 +38,8 @@ def main():
 
     out = Volume.zeros_like(xmap)
     smax = 0.5 / resolution
-    transformer = Transformer(structure, out)
-    transformer.mask()
+    transformer = Transformer(structure, out, simple=args.simple)
+    transformer.mask(1)
     out.tofile('mask.ccp4')
     transformer.reset()
     transformer.density()
