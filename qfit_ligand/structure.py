@@ -81,7 +81,7 @@ class Structure(object):
         if return_ind:
             return selection
         else:
-            return Structure(self.data[selection], self.coor[selection])
+            return self.__class__(self.data[selection], self.coor[selection])
 
     def _get_property(self, ptype):
         elements, ind = np.unique(self.data['e'], return_inverse=True)
@@ -95,7 +95,6 @@ class Structure(object):
             values.append(value)
         out = np.asarray(values, dtype=np.float64)[ind]
         return out
-
 
     @property
     def covalent_radius(self):
@@ -205,44 +204,56 @@ class Ligand(Structure):
                             break
                 if new_bond:
                     rotatable_bonds.append((atom, neighbor))
-                # Check if atom is SP1 hybridized, i.e. angle with its
-                # two neighbors is 180 degree.
-                #if neighbors.sum() == 2:
-                #    n1, n2 = neighbors
-                #    origin = self.coor[atom]
-                #    v1 = self.coor[n1] - origin
-                #    v2 = self.coor[n2] - origin
-                #    angle = np.rad2deg(np.arccos(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))))
-                #    if (angle - 180) <= 2:
-                #        break
         return rotatable_bonds
 
     def rigid_clusters(self):
+        """
+        Find rigid clusters / seeds in the molecule. Currently seeds are
+        either rings or terminal ends of the molecule, i.e. the last two
+        atoms.
+        """
 
         conn = self.connectivity()
         rings = self.ring_paths()
         clusters = []
-        checked = []
         for root in xrange(self.natoms):
-            if root in checked:
+            # Check if root is Hydrogen
+            element = self.e[root]
+            if element == 'H':
                 continue
+            # Check if root has already been clustered
+            clustered = False
+            for cluster in clusters:
+                if root in cluster:
+                    clustered = True
+                    break
+            if clustered:
+                continue
+            # If not, start new cluster
             cluster = [root]
+            # Check if atom is part of a ring, if so add all atoms. This
+            # step combines multi-ring systems.
+            ring_atom = False
             for atom in cluster:
                 for ring in rings:
                     if atom in ring:
+                        ring_atom = True
                         for a in ring:
                             if a not in cluster:
                                 cluster.append(a)
-                neighbors = np.flatnonzero(conn[atom])
+            # If root is not part of a ring, check if it is connected to a
+            # terminal heavy atom.
+            if not ring_atom:
+                neighbors = np.flatnonzero(conn[root])
                 for n in neighbors:
-                    if n in cluster:
-                        continue
                     neighbor_neighbors = np.flatnonzero(conn[n])
-                    if len(neighbor_neighbors) == 1:
+                    # Hydrogen neighbors don't count
+                    hydrogen_neighbors = (self.e[neighbor_neighbors] == 'H').sum()
+                    if len(neighbor_neighbors) - hydrogen_neighbors == 1:
                         cluster.append(n)
-                checked.append(atom)
             if len(cluster) > 1:
                 clusters.append(cluster)
+        # Add all left-over single unclustered atoms
         for atom in xrange(self.natoms):
             found = False
             for cluster in clusters:
