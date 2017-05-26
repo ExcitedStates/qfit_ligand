@@ -73,12 +73,12 @@ def main():
             ligand, xmap, args.resolution, receptor=receptor, 
             build=(not args.no_build), build_stepsize=args.build_stepsize, 
             stepsize=args.stepsize, local_search=(not args.no_local), 
-            cardinality=args.cardinality, threshold=args.threshold,
+            cardinality=10, threshold=0.01,
             directory=args.directory, scale=(not args.no_scale),
             )
     builder()
 
-    builder._MIQP(maxfits=args.cardinality, exact=False)
+    builder._MIQP(maxfits=args.cardinality, threshold=args.threshold, exact=False)
     base = 'conformer'
     builder.write_results(base=base)
 
@@ -87,7 +87,7 @@ def main():
         nmax = min(nmax, int(1.0 / args.threshold))
 
     for n in xrange(1, nmax):
-        builder._MIQP(maxfits=n, exact=True)
+        builder._MIQP(maxfits=n, threshold=args.threshold, exact=True)
         base = 'conformer_{:d}'.format(n)
         builder.write_results(base=base)
 
