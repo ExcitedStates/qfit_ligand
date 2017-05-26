@@ -1,5 +1,6 @@
 import argparse
 import time
+from itertools import izip
 
 import numpy as np
 
@@ -24,6 +25,10 @@ def parse_args():
             help="Cardinality constraint during MIQP. None by default.")
     p.add_argument("-t", "--threshold", type=float, default=None,
             help="Threshold constraint during MIQP. None by default.")
+    p.add_argument("-ns", "--no-scale", action="store_true",
+            help="Do not scale the density.")
+    p.add_argument("-nn", "--no-normalize", action="store_true",
+            help="Do not normalize the occupancies.")
 
     args = p.parse_args()
 
@@ -53,7 +58,8 @@ def solve():
     for coor in coor_set:
         ligand.coor[:] = coor
         transformer.mask(rmask)
-    mask = transformer.volume.array > 0
+    mask = model_map.array > 0
+    model_map.array.fill(0)
 
     nvalues = mask.sum()
     target = xmap.array[mask]
@@ -65,15 +71,21 @@ def solve():
         models[n,:] = transformer.volume.array[mask]
     print 'Time required for density generation:', time.time() - time0
 
-    qpsolver = QPSolver(target, models, scale=True)
-    qpsolver()
-    for fname, occ in zip(args.ligands, qpsolver.occupancies):
-        if occ >= 0.005:
+    #qpsolver = QPSolver(target, models, 
+    #        scale=(not args.no_scale), normalize=(not args.normalize))
+    #qpsolver.initialize()
+    #qpsolver()
+
+    miqpsolver = MIQPSolver(target, models, 
+            scale=(not args.no_scale), 
+            normalize=(not args.no_normalize))
+    miqpsolver.initialize()
+    miqpsolver(maxfits=args.cardinality, threshold=args.threshold)
+    for fname, occ in izip(args.ligands, miqpsolver.occupancies):
+        if occ >= 0.0005:
             print fname, occ
 
 
-    #miqpsolver = MIQPSolver(target, models, scale=True)
-    #miqpsolver(maxfits=5)
-    #for fname, occ in zip(args.ligands, miqpsolver.occupancies):
-    #    print fname, occ
+    for fname, occ in zip(args.ligands, miqpsolver.occupancies):
+        print fname, occ
 
