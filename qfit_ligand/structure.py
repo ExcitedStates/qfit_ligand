@@ -50,6 +50,10 @@ class Structure(object):
     def rmsd(self, structure):
         return np.sqrt(((self.coor - structure.coor) ** 2).mean() * 3)
 
+    def combine(self, structure):
+        return Structure(np.hstack((self.data, structure.data)),
+                         np.vstack((self.coor, structure.coor)))
+
     def select(self, identifier, values, loperator='==', return_ind=False):
         """A simple way of selecting atoms"""
         if loperator == '==':
@@ -99,6 +103,10 @@ class Structure(object):
     @property
     def covalent_radius(self):
         return self._get_property('covrad')
+
+    @property
+    def vdw_radius(self):
+        return self._get_property('vdwrad')
 
 
 class Ligand(Structure):
