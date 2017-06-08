@@ -13,8 +13,8 @@ class ClashDetector(object):
 
         self.ligand = ligand
         self.scaling_factor = scaling_factor
-        receptor_radius = receptor.covalent_radius
-        self.ligand_radius = self.ligand.covalent_radius
+        receptor_radius = receptor.vdw_radius
+        self.ligand_radius = self.ligand.vdw_radius
         self.voxelspacing = self.scaling_factor * (receptor_radius.max() + self.ligand_radius.max())
 
         self.grid = defaultdict(list)
