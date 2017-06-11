@@ -44,6 +44,10 @@ def parse_args():
             help="Cardinality constraint used during MIQP.")
     p.add_argument("-t", "--threshold", type=float, default=0.2, metavar="<float>",
             help="Treshold constraint used during MIQP.")
+    p.add_argument("-it", "--intermediate-threshold", type=float, default=0.01, metavar="<float>",
+            help="Threshold constraint during intermediate MIQP.")
+    p.add_argument("-ic", "--intermediate-cardinality", type=int, default=10, metavar="<int>",
+            help="Cardinality constraint used during intermediate MIQP.")
     p.add_argument("-d", "--directory", type=os.path.abspath, 
             default='.', metavar="<dir>",
             help="Directory to store results.")
@@ -90,7 +94,8 @@ def main():
             ligand, xmap, args.resolution, receptor=receptor, 
             build=(not args.no_build), build_stepsize=args.build_stepsize, 
             stepsize=args.stepsize, local_search=(not args.no_local), 
-            cardinality=10, threshold=0.01,
+            cardinality=args.intermediate_cardinality, 
+            threshold=args.intermediate_threshold,
             directory=args.directory, scale=(not args.no_scale),
             )
     builder()
