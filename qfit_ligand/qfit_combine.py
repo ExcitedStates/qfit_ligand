@@ -4,6 +4,8 @@ from argparse import ArgumentParser
 import string
 from itertools import izip
 
+import numpy as np
+
 from .structure import Structure
 
 
@@ -16,6 +18,8 @@ def parse_args():
             help="Receptor.")
     p.add_argument("-o", "--output", type=str, default='multiconformer.pdb',
             help="Name of output file.")
+    p.add_argument("--remove", action="store_true",
+            help="First remove present ligand, based on input ligands chain and residue id.")
 
     args = p.parse_args()
     return args
@@ -25,12 +29,24 @@ def main():
 
     args = parse_args()
 
-    if args.receptor is not None:
-        receptor = Structure.fromfile(args.receptor)
     
     for altloc, fname in izip(string.ascii_uppercase, args.ligands):
         l = Structure.fromfile(fname)
         l.altloc[:] = altloc
-        receptor = receptor.combine(l)
+        try:
+            multiconf = multiconf.combine(l)
+        except:
+            multiconf = l
 
-    receptor.tofile(args.output)
+    if args.receptor is not None:
+        receptor = Structure.fromfile(args.receptor)
+        if args.remove:
+            chain = l.data['chain'][0]
+            resi = l.data['resi'][0]
+            selection = receptor.select('resi', resi, return_ind=True)
+            selection &= receptor.select('chain', chain, return_ind=True)
+            selection = np.logical_not(selection)
+            receptor = Structure(receptor.data[selection], receptor.coor[selection])
+        multiconf = receptor.combine(multiconf)
+
+    multiconf.tofile(args.output)
