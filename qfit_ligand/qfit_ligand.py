@@ -42,7 +42,7 @@ def parse_args():
             help="Do not scale density while building ligand.")
     p.add_argument("-c", "--cardinality", type=int, default=5, metavar="<int>",
             help="Cardinality constraint used during MIQP.")
-    p.add_argument("-t", "--threshold", type=float, default=0.2, metavar="<float>",
+    p.add_argument("-t", "--threshold", type=float, default=0.1, metavar="<float>",
             help="Treshold constraint used during MIQP.")
     p.add_argument("-it", "--intermediate-threshold", type=float, default=0.01, metavar="<float>",
             help="Threshold constraint during intermediate MIQP.")

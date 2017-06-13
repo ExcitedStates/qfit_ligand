@@ -46,7 +46,7 @@ class HierarchicalBuilder(object):
         self._djoiner = DJoiner(directory)
 
         if self.receptor is not None:
-            self._cd = ClashDetector(self.ligand, self.receptor, 0.75)
+            self._cd = ClashDetector(self.ligand, self.receptor, 0.5)
             if self._cd():
                 logger.warning("Initial ligand configuration is clashing!")
 
@@ -88,6 +88,7 @@ class HierarchicalBuilder(object):
             logger.info("Initializing")
             transformer.initialize()
             transformer.density()
+            self.xmap.array += self.xmap.array.min()
             xmap_masked = self.xmap.array[mask]
             model_masked = model_map.array[mask]
             model_masked_mean = model_masked.mean()

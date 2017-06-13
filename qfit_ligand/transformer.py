@@ -52,12 +52,10 @@ class Transformer(object):
         self._grid_coor = np.zeros_like(self.ligand.coor)
 
     def mask(self, rmax=None):
-        #transform = self.cartesian_to_lattice
-        #np.dot(self.ligand.coor - self.volume.origin, transform.T, out=self._grid_coor)
-        #self._grid_coor -= self.volume.offset
         transform = np.asmatrix(self.cartesian_to_lattice)
         self._grid_coor = ((transform * (self.ligand.coor - self.volume.origin).T).T 
                 / self.volume.voxelspacing - self.volume.offset)
+
         if rmax is None:
             rmax = self.rmax
 
