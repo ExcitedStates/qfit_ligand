@@ -74,13 +74,15 @@ class MIQPSolver(object):
 
     """Mixed Integer Quadratic Program based on CPLEX."""
 
-    def __init__(self, target, models, scale=False, normalize=False):
+    def __init__(self, target, models, scale=False, 
+            normalize=False, threads=None):
         self._target = target
         self._models = models
         self._nconformers = models.shape[0]
         self.initialized = False
         self.normalize = normalize
         self.scale = scale
+        self.threads = threads
 
     def initialize(self):
         scaling_factor = 1
@@ -100,7 +102,7 @@ class MIQPSolver(object):
 
         self.initialized = True
 
-    def __call__(self, maxfits=None, exact=False, threshold=None, threads=None):
+    def __call__(self, maxfits=None, exact=False, threshold=None):
 
         if not self.initialized:
             self.initialize()
@@ -111,8 +113,8 @@ class MIQPSolver(object):
         miqp.set_warning_stream(None)
         miqp.set_error_stream(None)
         # Set number of threads to use
-        if threads is not None:
-            miqp.parameters.threads.set(threads)
+        if self.threads is not None:
+            miqp.parameters.threads.set(self.threads)
 
         # Setup QP part of the MIQP
         variable_names = ['w{:d}'.format(n) for n in xrange(self._nconformers)]
