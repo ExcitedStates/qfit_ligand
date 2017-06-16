@@ -20,7 +20,7 @@ class HierarchicalBuilder(object):
     def __init__(self, ligand, xmap, resolution, receptor=None, 
             global_search=False, local_search=True, build=True,
             stepsize=2, build_stepsize=1, scale=True, threshold=None, cardinality=5,
-            directory='.', roots=None):
+            directory='.', roots=None, threads=None):
         self.ligand = ligand
         self.xmap = xmap
         self.resolution = resolution
@@ -40,6 +40,7 @@ class HierarchicalBuilder(object):
         # For MIQP
         self.threshold = threshold
         self.cardinality = cardinality
+        self.threads = threads
 
         self._trans_box = [(-0.2, 0.21, 0.1)] * 3
         self._sampling_range = np.deg2rad(np.arange(0, 360, self.stepsize))
@@ -326,7 +327,7 @@ class HierarchicalBuilder(object):
 
     def _MIQP(self, maxfits=None, exact=False, threshold=None):
         logger.info("Starting MIQP.")
-        miqpsolver = MIQPSolver(self._target, self._models, scale=self.scale)
+        miqpsolver = MIQPSolver(self._target, self._models, scale=self.scale, threads=self.threads)
         logger.info("Initializing.")
         miqpsolver.initialize()
         logger.info("Solving")

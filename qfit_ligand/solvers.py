@@ -100,7 +100,7 @@ class MIQPSolver(object):
 
         self.initialized = True
 
-    def __call__(self, maxfits=None, exact=False, threshold=None):
+    def __call__(self, maxfits=None, exact=False, threshold=None, threads=None):
 
         if not self.initialized:
             self.initialize()
@@ -110,6 +110,9 @@ class MIQPSolver(object):
         miqp.set_log_stream(None)
         miqp.set_warning_stream(None)
         miqp.set_error_stream(None)
+        # Set number of threads to use
+        if threads is not None:
+            miqp.parameters.threads.set(threads)
 
         # Setup QP part of the MIQP
         variable_names = ['w{:d}'.format(n) for n in xrange(self._nconformers)]

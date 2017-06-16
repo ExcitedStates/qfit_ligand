@@ -51,6 +51,9 @@ def parse_args():
     p.add_argument("-d", "--directory", type=os.path.abspath, 
             default='.', metavar="<dir>",
             help="Directory to store results.")
+    p.add_argument("-p", "--processors", type=int,
+            default=None, metavar="<int>",
+            help="Number of threads to use. Currently this only changes the CPLEX behaviour.")
     p.add_argument("-v", "--verbose", action="store_true",
             help="Be verbose.")
     args = p.parse_args()
@@ -97,6 +100,7 @@ def main():
             cardinality=args.intermediate_cardinality, 
             threshold=args.intermediate_threshold,
             directory=args.directory, scale=(not args.no_scale),
+            threads=args.processors,
             )
     builder()
 
