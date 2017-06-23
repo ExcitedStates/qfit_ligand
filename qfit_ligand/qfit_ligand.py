@@ -108,11 +108,11 @@ def main():
     base = 'conformer'
     builder.write_results(base=base)
 
-    nmax = min(len(builder._coor_set) + 1, 6)
+    nmax = min(len(builder._coor_set), 5)
     if args.threshold not in (0, None):
         nmax = min(nmax, int(1.0 / args.threshold))
 
-    for n in xrange(1, nmax):
+    for n in xrange(1, nmax + 1):
         builder._MIQP(maxfits=n, threshold=args.threshold, exact=True)
         base = 'conformer_{:d}'.format(n)
         builder.write_results(base=base)
