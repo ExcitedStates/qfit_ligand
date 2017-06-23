@@ -11,25 +11,18 @@ import cplex
 
 class QPSolver(object):
 
-    def __init__(self, target, models, scale=False, normalize=False):
+    def __init__(self, target, models, normalize=False):
         self._target = target
         self._models = models
         self._nconformers = models.shape[0]
         self.initialized = False
         self.normalize = normalize
 
-        self.scale = scale
         self._solution = None
         self.weights = None
         self.occupancies = None
 
     def initialize(self):
-
-        scaling_factor = 1
-        if self.scale:
-            target_sum = self._target[self._target > 0].sum()
-            model_sum = self._models[0].sum()
-            scaling_factor = model_sum / target_sum
 
         # Set up the matrices and restraints
         self._quad_obj = cvxopt.matrix(0, (self._nconformers, self._nconformers), tc='d')
@@ -39,7 +32,7 @@ class QPSolver(object):
                 self._quad_obj[i,j] = np.inner(self._models[i], self._models[j])
                 # Matrix is symmetric
                 self._quad_obj[j,i] = self._quad_obj[i,j]
-            self._lin_obj[i] = -scaling_factor * np.inner(self._models[i], self._target)
+            self._lin_obj[i] = -np.inner(self._models[i], self._target)
 
         # lower-equal constraints.
         # Each weight falls in the closed interval [0..1] and its sum is <= 1.
@@ -74,22 +67,15 @@ class MIQPSolver(object):
 
     """Mixed Integer Quadratic Program based on CPLEX."""
 
-    def __init__(self, target, models, scale=False, 
-            normalize=False, threads=None):
+    def __init__(self, target, models, normalize=False, threads=None):
         self._target = target
         self._models = models
         self._nconformers = models.shape[0]
         self.initialized = False
         self.normalize = normalize
-        self.scale = scale
         self.threads = threads
 
     def initialize(self):
-        scaling_factor = 1
-        if self.scale:
-            target_sum = self._target[self._target > 0].sum()
-            model_sum = self._models[0].sum()
-            scaling_factor = model_sum / target_sum
 
         self._quad_obj = np.zeros((self._nconformers, self._nconformers))
         self._lin_obj = np.zeros(self._nconformers)
@@ -98,7 +84,7 @@ class MIQPSolver(object):
                 self._quad_obj[i,j] = np.inner(self._models[i], self._models[j])
                 # Matrix is symmetric
                 self._quad_obj[j,i] = self._quad_obj[i,j]
-            self._lin_obj[i] = -scaling_factor * np.inner(self._models[i], self._target)
+            self._lin_obj[i] = -np.inner(self._models[i], self._target)
 
         self.initialized = True
 

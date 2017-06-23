@@ -4,6 +4,7 @@ import argparse
 import os.path
 import sys
 import logging
+import time
 logger = logging.getLogger(__name__)
 
 import numpy as np
@@ -28,6 +29,10 @@ def parse_args():
             help="PDB file containing receptor for clash detection.")
     p.add_argument('--selection', default=None, type=str,
             help="Chain and residue id for ligand in main PDB file, e.g. A,105.")
+    p.add_argument("-ns", "--no-scale", action="store_true",
+            help="Do not scale density.")
+    p.add_argument("-dc", "--density-cutoff", type=float, default=None,
+            help="Density value cutoff. Values below this threshold are set to 0 after scaling.")
     #p.add_argument("-g", "--global-search", action="store_true",
     #        help="Perform a global search.")
     p.add_argument("-nb", "--no-build", action="store_true",
@@ -38,8 +43,6 @@ def parse_args():
             help="Number of internal degrees that are sampled/build per iteration.")
     p.add_argument("-s", "--stepsize", type=float, default=1, metavar="<float>",
             help="Stepsize for dihedral angle sampling in degree.")
-    p.add_argument("--no-scale", action="store_true",
-            help="Do not scale density while building ligand.")
     p.add_argument("-c", "--cardinality", type=int, default=5, metavar="<int>",
             help="Cardinality constraint used during MIQP.")
     p.add_argument("-t", "--threshold", type=float, default=0.1, metavar="<float>",
@@ -53,7 +56,7 @@ def parse_args():
             help="Directory to store results.")
     p.add_argument("-p", "--processors", type=int,
             default=None, metavar="<int>",
-            help="Number of threads to use. Currently this only changes the CPLEX behaviour.")
+            help="Number of threads to use. Currently this only changes the CPLEX/MIQP behaviour.")
     p.add_argument("-v", "--verbose", action="store_true",
             help="Be verbose.")
     args = p.parse_args()
@@ -68,6 +71,7 @@ def main():
     logging_fname = os.path.join(args.directory, 'qfit_ligand.log') 
     logging.basicConfig(filename=logging_fname, level=logging.INFO)
     logger.info(' '.join(sys.argv))
+    logger.info(time.strftime("%c %Z"))
     if args.verbose:
         console_out = logging.StreamHandler(stream=sys.stdout)
         console_out.setLevel(logging.INFO)
@@ -97,9 +101,8 @@ def main():
             ligand, xmap, args.resolution, receptor=receptor, 
             build=(not args.no_build), build_stepsize=args.build_stepsize, 
             stepsize=args.stepsize, local_search=(not args.no_local), 
-            cardinality=args.intermediate_cardinality, 
-            threshold=args.intermediate_threshold,
-            directory=args.directory, scale=(not args.no_scale),
+            cardinality=args.intermediate_cardinality, threshold=args.intermediate_threshold,
+            directory=args.directory, scale=(not args.no_scale), cutoff=args.density_cutoff,
             threads=args.processors,
             )
     builder()

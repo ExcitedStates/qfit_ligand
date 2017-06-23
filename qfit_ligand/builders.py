@@ -19,7 +19,8 @@ class HierarchicalBuilder(object):
 
     def __init__(self, ligand, xmap, resolution, receptor=None, 
             global_search=False, local_search=True, build=True,
-            stepsize=2, build_stepsize=1, scale=True, threshold=None, cardinality=5,
+            stepsize=2, build_stepsize=1, scale=True, cutoff=None,
+            threshold=None, cardinality=5,
             directory='.', roots=None, threads=None):
         self.ligand = ligand
         self.xmap = xmap
@@ -32,6 +33,7 @@ class HierarchicalBuilder(object):
         self.local_search = local_search
         self.receptor = receptor
         self.scale = scale
+        self.cutoff = cutoff
         if self.resolution < 3.0:
             self._rmask = 0.7 + (self.resolution - 0.6) / 3.0
         else:
@@ -52,6 +54,7 @@ class HierarchicalBuilder(object):
                 logger.warning("Initial ligand configuration is clashing!")
 
         self._rigid_clusters = self.ligand.rigid_clusters()
+        # Determine which roots to start building from
         if roots is None:
             self._clusters_to_sample = []
             for cluster in self._rigid_clusters:
@@ -73,40 +76,50 @@ class HierarchicalBuilder(object):
         self.conformers = []
         self._occupancies = []
 
-        # Initialize density creation
         smax = 1 / (2 * self.resolution)
-        model_map = Volume.zeros_like(self.xmap)
+        self._model_map = Volume.zeros_like(self.xmap)
         # Scale the experimental density using a scaling factor under the
         # footprint of the receptor if given.
-        if self.scale and self.receptor is not None:
-            logger.info("Scaling map")
-            transformer = Transformer(self.receptor, model_map, simple=True,
-                    rmax=3)
-            logger.info("Making mask.")
-            transformer.mask(self._rmask)
-            mask = model_map.array > 0
-            transformer.reset()
-            logger.info("Initializing")
-            transformer.initialize()
-            transformer.density()
-            self.xmap.array += self.xmap.array.min()
-            xmap_masked = self.xmap.array[mask]
-            model_masked = model_map.array[mask]
-            model_masked_mean = model_masked.mean()
-            xmap_masked_mean = xmap_masked.mean()
-            model_masked -= model_masked_mean
-            xmap_masked -= xmap_masked_mean
-            scaling_factor = ((model_masked * xmap_masked).sum() /
-                    (xmap_masked * xmap_masked).sum())
-            logger.info("Scaling factor: {:.2f}".format(scaling_factor))
-            self.xmap.array -= xmap_masked_mean
-            self.xmap.array *= scaling_factor
-            self.xmap.array += model_masked_mean
-            self.scale = False
-            model_map.array.fill(0)
+        if self.scale:
+            self._scale_map()
+        # Initialize density creation
+        self._transformer = Transformer(self.ligand, self._model_map, smax=smax, rmax=3)
 
-        self._transformer = Transformer(self.ligand, model_map, 
-                smax=smax, rmax=3)
+    def _scale_map(self):
+        logger.info("Scaling map")
+        if self.receptor is not None:
+            footprint = self.receptor
+        else:
+            footprint = self.ligand
+        # smax doesnt have any impact here.
+        transformer = Transformer(footprint, self._model_map, simple=True, rmax=3)
+        logger.info("Making mask.")
+        transformer.mask(self._rmask)
+        mask = self._model_map.array > 0
+        transformer.reset()
+        logger.info("Initializing")
+        transformer.initialize()
+        transformer.density()
+        xmap_masked = self.xmap.array[mask]
+        model_masked = self._model_map.array[mask]
+        model_masked_mean = model_masked.mean()
+        xmap_masked_mean = xmap_masked.mean()
+        model_masked -= model_masked_mean
+        xmap_masked -= xmap_masked_mean
+        scaling_factor = ((model_masked * xmap_masked).sum() /
+                (xmap_masked * xmap_masked).sum())
+        logger.info("Scaling factor: {:.2f}".format(scaling_factor))
+        self.xmap.array -= xmap_masked_mean
+        self.xmap.array *= scaling_factor
+        self.xmap.array += model_masked_mean
+        # Subtract the receptor density from the map
+        if self.receptor is not None:
+            self.xmap.array -= self._model_map.array
+        # Set values below cutoff to zero, to penalize the solvent more
+        if self.cutoff is not None:
+            self.xmap.array[self.xmap.array < self.cutoff] = 0
+        self._model_map.array.fill(0)
+        #self.xmap.tofile(self._djoiner('map_scaled.ccp4'))
 
     def __call__(self):
 
@@ -318,7 +331,7 @@ class HierarchicalBuilder(object):
 
     def _QP(self):
         logger.info("Starting QP.")
-        qpsolver = QPSolver(self._target, self._models, scale=self.scale)
+        qpsolver = QPSolver(self._target, self._models)
         logger.info("Initializing.")
         qpsolver.initialize()
         logger.info("Solving")
@@ -327,7 +340,7 @@ class HierarchicalBuilder(object):
 
     def _MIQP(self, maxfits=None, exact=False, threshold=None):
         logger.info("Starting MIQP.")
-        miqpsolver = MIQPSolver(self._target, self._models, scale=self.scale, threads=self.threads)
+        miqpsolver = MIQPSolver(self._target, self._models, threads=self.threads)
         logger.info("Initializing.")
         miqpsolver.initialize()
         logger.info("Solving")
