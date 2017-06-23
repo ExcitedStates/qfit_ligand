@@ -21,6 +21,8 @@ def parse_args():
             help="Make simple density to scale against.")
     p.add_argument("-o", "--output", type=str, default=None,
             help="Name of output file.")
+    p.add_argument("-c", "--cutoff", type=float, default=None,
+            help="All values below cutoff are set to 0 before scaling.")
 
     args = p.parse_args()
     if args.output is None:
@@ -49,6 +51,7 @@ def main():
     transformer.mask(rmask)
     mask = model.array > 0
     transformer.reset()
+    model.array.fill(0)
     print 'Initializing'
     transformer.initialize()
     print 'Scaling'
@@ -64,6 +67,12 @@ def main():
     scaling_factor = (model_masked * xmap_masked).sum() / \
             (xmap_masked * xmap_masked).sum()
     print "Scaling factor: {:.2f}".format(scaling_factor)
+    xmap.array -= xmap_masked_mean
     xmap.array *= scaling_factor
-    xmap.array += model_masked.mean()
+    xmap.array += model_masked_mean
+    xmap.array -= model.array
+
+    if args.cutoff is not None:
+        cutoff_mask = xmap.array < args.cutoff
+        xmap.array[cutoff_mask] = 0
     xmap.tofile(args.output)
