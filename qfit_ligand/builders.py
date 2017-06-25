@@ -83,6 +83,8 @@ class HierarchicalBuilder(object):
         if self.scale:
             self._scale_map()
         # Initialize density creation
+        # We can let go of the spacegroup now that we have prepared the map.
+        self._model_map.set_spacegroup("P1")
         self._transformer = Transformer(self.ligand, self._model_map, smax=smax, rmax=3)
 
     def _scale_map(self):
@@ -119,7 +121,7 @@ class HierarchicalBuilder(object):
         if self.cutoff is not None:
             self.xmap.array[self.xmap.array < self.cutoff] = 0
         self._model_map.array.fill(0)
-        #self.xmap.tofile(self._djoiner('map_scaled.ccp4'))
+        self.xmap.tofile(self._djoiner('map_scaled.ccp4'))
 
     def __call__(self):
 

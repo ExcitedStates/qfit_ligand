@@ -7,11 +7,14 @@ import warnings
 import numpy as np
 from scipy.ndimage import zoom, gaussian_filter
 
+from .spacegroups import GetSpaceGroup
+from ._extensions import extend_to_p1
+
 
 class Volume(object):
 
-    def __init__(self, array, voxelspacing=1, origin=(0, 0, 0), 
-                 angles=(90, 90, 90), offset=(0, 0, 0)):
+    def __init__(self, array, voxelspacing=1.0, origin=(0, 0, 0), 
+                 angles=(90, 90, 90), offset=(0, 0, 0), spacegroup=None, cell_shape=None):
 
         self.array = array
         if isinstance(voxelspacing, float):
@@ -25,21 +28,30 @@ class Volume(object):
 
         self.a, self.b, self.c = self.lattice_parameters
         self.alpha, self.beta, self.gamma = self.angles
+        if spacegroup is not None:
+            self.spacegroup = GetSpaceGroup(spacegroup)
+        else:
+            self.spacegroup = None
+        self.cell_shape = cell_shape
 
     @classmethod
     def fromfile(cls, fid, fmt=None):
-        array, voxelspacing, origin, angles, offset = parse_volume(fid, fmt)
-        return cls(array, voxelspacing, origin, angles, offset=offset)
+        p = parse_volume(fid)
+        return cls(p.density, voxelspacing=p.voxelspacing, 
+                origin=p.origin, angles=p.angles, offset=p.offset,
+                spacegroup=p.spacegroup, cell_shape=p.cell_shape)
 
     @classmethod
     def zeros(cls, shape, voxelspacing=1.0, origin=(0, 0, 0), 
-              angles=(90, 90, 90), offset=(0, 0, 0)):
-        return cls(np.zeros(shape, dtype=np.float64), voxelspacing, origin, angles, offset)
+              angles=(90, 90, 90), offset=(0, 0, 0), spacegroup=None, cell_shape=None):
+        return cls(np.zeros(shape, dtype=np.float64), voxelspacing, 
+                origin, angles, offset, spacegroup, cell_shape)
 
     @classmethod
     def zeros_like(cls, volume):
         return cls(np.zeros_like(volume.array), volume.voxelspacing,
-                volume.origin, volume.angles, volume.offset)
+                volume.origin, volume.angles, volume.offset, 
+                volume.spacegroup, volume.cell_shape)
         
     @property
     def shape(self):
@@ -48,6 +60,22 @@ class Volume(object):
     def duplicate(self):
         return Volume(self.array.copy(), voxelspacing=self.voxelspacing,
                       origin=self.origin, angles=self.angles, offset=self.offset)
+
+    def fill_unit_cell(self):
+        if self.cell_shape is None:
+            raise ValueError("cell_shape attribute is None.")
+        out = Volume.zeros(self.cell_shape, voxelspacing=self.voxelspacing, 
+                origin=self.origin, angles=self.angles, offset=(0,0,0), 
+                spacegroup=self.spacegroup, cell_shape=self.cell_shape)
+        offset = np.asarray(self.offset, np.int32)
+        for symop in self.spacegroup.symop_list:
+            trans = np.hstack((symop.R, symop.t.reshape(3, -1)))
+            trans[:, -1] *= out.shape[::-1]
+            extend_to_p1(self.array, offset, trans, out.array)
+        return out
+
+    def set_spacegroup(self, spacegroup):
+        self.spacegroup = GetSpaceGroup(spacegroup)
 
     def tofile(self, fid, fmt=None):
         if fmt is None:
@@ -73,11 +101,9 @@ def parse_volume(fid, fmt=None):
         p = CCP4Parser(fname)
     elif fmt == 'mrc':
         p = MRCParser(fname)
-    #elif fmt in ('xplor', 'cns'):
-    #    p = XPLORParser(fname)
     else:
         raise ValueError('Extension of file is not supported.')
-    return p.density, p.voxelspacing, p.origin, p.angles, p.offset
+    return p
 
 
 class CCP4Parser(object):
@@ -114,6 +140,8 @@ class CCP4Parser(object):
         self.shape = tuple(self.header[key] for key in ('nx', 'ny', 'nz'))
         self.voxelspacing = tuple(length / n 
                 for length, n in zip(self.params, self.shape))
+        self.spacegroup = int(self.header['ispg'])
+        self.cell_shape = [self.header[key] for key in 'nz ny nx'.split()]
         self._get_offset()
         self._get_origin()
         # Get the symbol table and ultimately the density

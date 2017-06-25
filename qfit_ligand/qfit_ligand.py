@@ -77,7 +77,7 @@ def main():
         console_out.setLevel(logging.INFO)
         logging.getLogger('').addHandler(console_out)
 
-    xmap = Volume.fromfile(args.xmap)
+    xmap = Volume.fromfile(args.xmap).fill_unit_cell()
     if args.selection is None:
         ligand = Ligand.fromfile(args.ligand)
         if args.receptor is not None:

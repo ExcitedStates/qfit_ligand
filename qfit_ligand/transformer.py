@@ -50,34 +50,42 @@ class Transformer(object):
             ])
         self.grid_to_cartesian = self.lattice_to_cartesian * self.volume.voxelspacing
         self._grid_coor = np.zeros_like(self.ligand.coor)
+        self._grid_coor_rot = np.zeros_like(self.ligand.coor)
+
+    def _coor_to_grid_coor(self):
+        if np.allclose(self.volume.origin, 0):
+            coor = self.ligand.coor
+        else:
+            coor = self.ligand.coor - self.volume.origin
+        np.dot(coor, self.cartesian_to_lattice.T, self._grid_coor)
+        self._grid_coor /= self.volume.voxelspacing
+        self._grid_coor -= self.volume.offset
 
     def mask(self, rmax=None):
-        transform = np.asmatrix(self.cartesian_to_lattice)
-        self._grid_coor = ((transform * (self.ligand.coor - self.volume.origin).T).T 
-                / self.volume.voxelspacing - self.volume.offset)
-
+        self._coor_to_grid_coor()
         if rmax is None:
             rmax = self.rmax
-
         lmax = np.asarray(
                 [rmax / vs for vs in self.volume.voxelspacing],
                 dtype=np.float64)
-        mask_points(self._grid_coor, self.ligand.q, lmax, rmax, 
-                    self.grid_to_cartesian, 1.0, self.volume.array)
+        for symop in self.volume.spacegroup.symop_list:
+            np.dot(self._grid_coor, symop.R.T, self._grid_coor_rot)
+            self._grid_coor_rot += symop.t * self.volume.shape[::-1]
+
+            mask_points(self._grid_coor_rot, self.ligand.q, lmax, rmax, 
+                        self.grid_to_cartesian, 1.0, self.volume.array)
 
     def reset(self):
-        transform = np.asmatrix(self.cartesian_to_lattice)
-        self._grid_coor = ((transform * (self.ligand.coor - self.volume.origin).T).T 
-                / self.volume.voxelspacing - self.volume.offset)
-        #transform = self.cartesian_to_lattice
-        #np.dot(self.ligand.coor - self.volume.origin, transform.T, out=self._grid_coor)
-        #self._grid_coor /= self.volume.voxelspacing
-        #self._grid_coor -= self.volume.offset
+        self._coor_to_grid_coor()
         lmax = np.asarray(
                 [self.rmax / vs for vs in self.volume.voxelspacing],
                 dtype=np.float64)
-        mask_points(self._grid_coor, self.ligand.q, lmax, self.rmax, 
-                    self.grid_to_cartesian, 0.0, self.volume.array)
+        for symop in self.volume.spacegroup.symop_list:
+            np.dot(self._grid_coor, symop.R.T, self._grid_coor_rot)
+            self._grid_coor_rot += symop.t * self.volume.shape[::-1]
+
+            mask_points(self._grid_coor_rot, self.ligand.q, lmax, self.rmax,
+                        self.grid_to_cartesian, 0.0, self.volume.array)
 
     def initialize(self):
         self.radial_densities = []
@@ -96,20 +104,16 @@ class Transformer(object):
         if not self._initialized:
             self.initialize()
 
-        transform = np.asmatrix(self.cartesian_to_lattice)
-        self._grid_coor = ((transform * (self.ligand.coor - self.volume.origin).T).T 
-                / self.volume.voxelspacing - self.volume.offset)
-        #transform = self.cartesian_to_lattice
-        #np.dot(self.ligand.coor - self.volume.origin, transform.T, out=self._grid_coor)
-        #self._grid_coor /= self.volume.voxelspacing
-        #self._grid_coor -= self.volume.offset
+        self._coor_to_grid_coor()
         lmax = np.asarray(
                 [self.rmax / vs for vs in self.volume.voxelspacing],
                 dtype=np.float64)
-
-        dilate_points(self._grid_coor, self.ligand.q, lmax, 
-                self.radial_densities, self.rstep, self.rmax,
-                self.grid_to_cartesian, self.volume.array)
+        for symop in self.volume.spacegroup.symop_list:
+            np.dot(self._grid_coor, symop.R.T, self._grid_coor_rot)
+            self._grid_coor_rot += symop.t * self.volume.shape[::-1]
+            dilate_points(self._grid_coor_rot, self.ligand.q, lmax, 
+                    self.radial_densities, self.rstep, self.rmax,
+                    self.grid_to_cartesian, self.volume.array)
 
     def simple_radial_density(self, element, bfactor):
         """Calculate electron density as a function of radius."""

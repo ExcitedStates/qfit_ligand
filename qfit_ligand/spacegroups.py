@@ -163,6 +163,12 @@ class SpaceGroup(object):
         self.pdb_name                = pdb_name
         self.symop_list              = symop_list
 
+    def __repr__(self):
+        return '"' + self.short_name + '"'
+
+    def __str__(self):
+        return self.short_name
+
     def iter_symops(self):
         """Iterates over all SymOps in the SpaceGroup.
         """
@@ -173,6 +179,11 @@ class SpaceGroup(object):
         True or False. The space group name can be in several forms:
         the short name, the longer PDB-style name, or the space group number.
         """
+        # In case a SpaceGroup instance is passed
+        try:
+            name = name.short_name
+        except AttributeError:
+            pass
         if name == self.short_name:       return True
         if name == self.pdb_name:         return True
         if name == self.point_group_name: return True
