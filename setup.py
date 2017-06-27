@@ -35,6 +35,7 @@ def main():
                   'qfit_sample = qfit_ligand.qfit_sample:main',
                   'qfit_scale = qfit_ligand.qfit_scale:main',
                   'qfit_combine = qfit_ligand.qfit_combine:main',
+                  'qfit_validate = qfit_ligand.qfit_validate:main',
                   ]
               },
          )

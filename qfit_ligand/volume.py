@@ -33,6 +33,15 @@ class Volume(object):
         else:
             self.spacegroup = None
         self.cell_shape = cell_shape
+        cos_alpha = np.cos(np.deg2rad(self.alpha))
+        cos_beta = np.cos(np.deg2rad(self.beta))
+        cos_gamma = np.cos(np.deg2rad(self.gamma))
+        omega = np.sqrt(
+                1 + 2 * cos_alpha * cos_beta * cos_gamma - 
+                cos_alpha * cos_alpha - cos_beta * cos_beta - 
+                cos_gamma * cos_gamma)
+        self.voxel_volume = np.product(self.voxelspacing) * omega
+        self.volume = np.product(self.lattice_parameters) * omega
 
     @classmethod
     def fromfile(cls, fid, fmt=None):
