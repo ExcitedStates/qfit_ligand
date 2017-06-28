@@ -5,6 +5,7 @@ import os.path
 import sys
 import logging
 import time
+from string import ascii_uppercase
 logger = logging.getLogger(__name__)
 
 import numpy as np
@@ -13,13 +14,14 @@ from .builders import HierarchicalBuilder
 from .structure import Ligand, Structure
 from .volume import Volume
 from .helpers import mkdir_p
+from .validator import Validator
 
 
 def parse_args():
 
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("xmap", type=str,
-            help="X-ray density map in CCP4 format with P1 symmetry.")
+            help="X-ray density map in CCP4 format.")
     p.add_argument("resolution", type=float,
             help="Map resolution in angstrom.")
     p.add_argument("ligand", type=str,
@@ -51,6 +53,8 @@ def parse_args():
             help="Threshold constraint during intermediate MIQP.")
     p.add_argument("-ic", "--intermediate-cardinality", type=int, default=10, metavar="<int>",
             help="Cardinality constraint used during intermediate MIQP.")
+    p.add_argument("-z", "--zscore-cutoff", default=1.0, type=float,
+            help="Cutoff Number of standard errors an additional conformer model need to increase the z-score in order to be included.")
     p.add_argument("-d", "--directory", type=os.path.abspath, 
             default='.', metavar="<dir>",
             help="Directory to store results.")
@@ -68,6 +72,7 @@ def main():
 
     args = parse_args()
     mkdir_p(args.directory)
+    time0 = time.time()
     logging_fname = os.path.join(args.directory, 'qfit_ligand.log') 
     logging.basicConfig(filename=logging_fname, level=logging.INFO)
     logger.info(' '.join(sys.argv))
@@ -94,29 +99,50 @@ def main():
         receptor_selection = np.logical_not(ligand_selection)
         receptor = Structure(structure.data[receptor_selection], 
                              structure.coor[receptor_selection]).select('e', 'H', '!=')
-        ligand = Ligand(structure.data[ligand_selection], structure.coor[ligand_selection]).select('altloc', ('', 'A', '1'))
+        ligand = Ligand(structure.data[ligand_selection], 
+                structure.coor[ligand_selection]).select('altloc', ('', 'A', '1'))
     ligand.q.fill(1)
 
     builder = HierarchicalBuilder(
             ligand, xmap, args.resolution, receptor=receptor, 
             build=(not args.no_build), build_stepsize=args.build_stepsize, 
             stepsize=args.stepsize, local_search=(not args.no_local), 
-            cardinality=args.intermediate_cardinality, threshold=args.intermediate_threshold,
-            directory=args.directory, scale=(not args.no_scale), cutoff=args.density_cutoff,
-            threads=args.processors,
+            cardinality=args.intermediate_cardinality, 
+            threshold=args.intermediate_threshold,
+            directory=args.directory, scale=(not args.no_scale), 
+            cutoff=args.density_cutoff, threads=args.processors,
             )
     builder()
 
-    builder._MIQP(maxfits=args.cardinality, threshold=args.threshold, exact=False)
+    builder._MIQP(threshold=args.threshold, maxfits=args.cardinality)
     base = 'conformer'
     builder.write_results(base=base)
+    conformers = builder.get_conformers()
+    validator = Validator(xmap, args.resolution)
+    character_index = 0
+    for n, conformer in enumerate(conformers, start=1):
+        conformer.data['altloc'].fill(ascii_uppercase[character_index])
+        if n == 1:
+            multiconformer = conformer
+            character_index += 1
+            continue
+        new_multiconformer = multiconformer.combine(conformer)
+        diff = validator.fisher_z_difference(multiconformer, new_multiconformer)
+        logger.info("Fisher z-score difference: {:.2f}".format(diff))
+        if diff >= args.zscore_cutoff:
+            multiconformer = new_multiconformer
+            character_index += 1
+    fname = os.path.join(args.directory, 'multiconformer.pdb')
+    multiconformer.tofile(fname)
 
-    nmax = min(len(builder._coor_set), 5)
-    if args.threshold not in (0, None):
-        nmax = min(nmax, int(1.0 / args.threshold))
-
-    for n in xrange(1, nmax + 1):
-        builder._MIQP(maxfits=n, threshold=args.threshold, exact=True)
-        base = 'conformer_{:d}'.format(n)
+    # Redo MIQP with different threshold constraints
+    threshold_list = [0.0, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4]
+    for threshold in threshold_list:
+        builder._MIQP(threshold=threshold, maxfits=args.cardinality)
+        base = 'conformer_t{:.2f}'.format(threshold)
         builder.write_results(base=base)
+
+    m, s = divmod(time.time() - time0, 60)
+    logger.info('Time passed: {m:.0f}m {s:.0f}s'.format(m=m, s=s))
+    logger.info(time.strftime("%c %Z"))
 

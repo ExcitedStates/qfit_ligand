@@ -1,4 +1,5 @@
 from __future__ import division
+import copy
 import itertools
 import logging
 logger = logging.getLogger(__name__)
@@ -121,7 +122,7 @@ class HierarchicalBuilder(object):
         if self.cutoff is not None:
             self.xmap.array[self.xmap.array < self.cutoff] = 0
         self._model_map.array.fill(0)
-        self.xmap.tofile(self._djoiner('map_scaled.ccp4'))
+        #self.xmap.tofile(self._djoiner('map_scaled.ccp4'))
 
     def __call__(self):
 
@@ -386,6 +387,20 @@ class HierarchicalBuilder(object):
             self.ligand.coor[:] = coor
             fname = fname_base.format(self._cluster_index, self._iteration, n)
             self.ligand.tofile(fname)
+
+    def get_conformers(self, cutoff=0.01):
+        conformers = []
+        iterator = itertools.izip(self._coor_set, self._occupancies)
+        for coor, occ in iterator:
+            if occ >= cutoff:
+                ligand = copy.deepcopy(self.ligand)
+                ligand.coor[:] = coor
+                ligand.q.fill(occ)
+                conformers.append(ligand)
+        # Sort conformers based on occupancy
+        conformers = sorted(conformers, 
+                key=lambda conformer: conformer.q[0], reverse=True)
+        return conformers
 
     def write_results(self, base='conformer', cutoff=0.01):
         logger.info("Writing results to file.")
