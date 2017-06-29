@@ -126,10 +126,11 @@ class HierarchicalBuilder(object):
 
     def __call__(self):
 
-        if self.global_search:
-            self._global_search()
-            self._all_coor_set += self._coor_set
+        #if self.global_search:
+        #    self._global_search()
+        #    self._all_coor_set += self._coor_set
 
+        self._all_occupancies = []
         if self.build:
             for self._cluster_index, self._cluster in enumerate(self._clusters_to_sample):
                 self._iteration = 0
@@ -141,14 +142,16 @@ class HierarchicalBuilder(object):
                 self._build_ligand()
 
                 self._all_coor_set += self._coor_set
+                self._all_occupancies += self._occupancies.tolist()
                 logger.info("Number of conformers: {:}".format(len(self._coor_set)))
                 logger.info("Number of final conformers: {:}".format(len(self._all_coor_set)))
 
         self._coor_set = self._all_coor_set
+        self._occupancies = np.asarray(self._all_occupancies)
         self._convert()
-        self._QP()
-        self._update_conformers()
-        self._convert()
+        #self._QP()
+        #self._update_conformers()
+        #self._convert()
 
     def _clashing(self):
         if self.receptor is None:

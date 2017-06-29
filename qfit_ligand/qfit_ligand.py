@@ -5,6 +5,7 @@ import os.path
 import sys
 import logging
 import time
+from itertools import izip
 from string import ascii_uppercase
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ def parse_args():
             help="Stepsize for dihedral angle sampling in degree.")
     p.add_argument("-c", "--cardinality", type=int, default=5, metavar="<int>",
             help="Cardinality constraint used during MIQP.")
-    p.add_argument("-t", "--threshold", type=float, default=0.1, metavar="<float>",
+    p.add_argument("-t", "--threshold", type=float, default=0.3, metavar="<float>",
             help="Treshold constraint used during MIQP.")
     p.add_argument("-it", "--intermediate-threshold", type=float, default=0.01, metavar="<float>",
             help="Threshold constraint during intermediate MIQP.")
@@ -93,7 +94,7 @@ def main():
         # Extract ligand and rest of structure
         structure = Structure.fromfile(args.ligand)
         types = (str, int)
-        chain, resi = [t(x) for t, x in zip(types, args.selection.split(','))]
+        chain, resi = [t(x) for t, x in izip(types, args.selection.split(','))]
         ligand_selection = structure.select('resi', resi, return_ind=True)
         ligand_selection &= structure.select('chain', chain, return_ind=True)
         receptor_selection = np.logical_not(ligand_selection)
@@ -113,6 +114,7 @@ def main():
             cutoff=args.density_cutoff, threads=args.processors,
             )
     builder()
+    builder.write_results(base='final', cutoff=0)
 
     builder._MIQP(threshold=args.threshold, maxfits=args.cardinality)
     base = 'conformer'
