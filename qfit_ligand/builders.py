@@ -1,5 +1,4 @@
 from __future__ import division
-import copy
 import itertools
 import logging
 logger = logging.getLogger(__name__)
@@ -142,7 +141,7 @@ class HierarchicalBuilder(object):
                 self._build_ligand()
 
                 self._all_coor_set += self._coor_set
-                self._all_occupancies += self._occupancies.tolist()
+                self._all_occupancies += list(self._occupancies)
                 logger.info("Number of conformers: {:}".format(len(self._coor_set)))
                 logger.info("Number of final conformers: {:}".format(len(self._all_coor_set)))
 
@@ -396,7 +395,7 @@ class HierarchicalBuilder(object):
         iterator = itertools.izip(self._coor_set, self._occupancies)
         for coor, occ in iterator:
             if occ >= cutoff:
-                ligand = copy.deepcopy(self.ligand)
+                ligand = Ligand(self.ligand.data.copy(), self.ligand.coor.copy())
                 ligand.coor[:] = coor
                 ligand.q.fill(occ)
                 conformers.append(ligand)
