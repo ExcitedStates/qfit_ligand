@@ -52,7 +52,7 @@ def parse_args():
             help="Treshold constraint used during MIQP.")
     p.add_argument("-it", "--intermediate-threshold", type=float, default=0.01, metavar="<float>",
             help="Threshold constraint during intermediate MIQP.")
-    p.add_argument("-ic", "--intermediate-cardinality", type=int, default=10, metavar="<int>",
+    p.add_argument("-ic", "--intermediate-cardinality", type=int, default=5, metavar="<int>",
             help="Cardinality constraint used during intermediate MIQP.")
     p.add_argument("-z", "--zscore-cutoff", default=1.0, type=float,
             help="Cutoff Number of standard errors an additional conformer model need to increase the z-score in order to be included.")
