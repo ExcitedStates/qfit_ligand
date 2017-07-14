@@ -33,7 +33,7 @@ def main():
     args = parse_args()
 
     structure = Structure.fromfile(args.pdb_file)
-    xmap = Volume.fromfile(args.xmap)
+    xmap = Volume.fromfile(args.xmap).fill_unit_cell()
     resolution = args.resolution
 
     out = Volume.zeros_like(xmap)
