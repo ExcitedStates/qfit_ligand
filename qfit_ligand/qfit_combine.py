@@ -30,19 +30,22 @@ def main():
     args = parse_args()
 
     
-    for altloc, fname in izip(string.ascii_uppercase, args.ligands):
-        l = Structure.fromfile(fname)
-        l.altloc[:] = altloc
-        try:
-            multiconf = multiconf.combine(l)
-        except:
-            multiconf = l
+    if len(args.ligands) == 1:
+        multiconf = Structure.fromfile(args.ligands[0])
+    else:
+        for altloc, fname in izip(string.ascii_uppercase, args.ligands):
+            l = Structure.fromfile(fname)
+            l.altloc[:] = altloc
+            try:
+                multiconf = multiconf.combine(l)
+            except:
+                multiconf = l
 
     if args.receptor is not None:
         receptor = Structure.fromfile(args.receptor)
         if args.remove:
-            chain = l.data['chain'][0]
-            resi = l.data['resi'][0]
+            chain = multiconf.data['chain'][0]
+            resi = multiconf.data['resi'][0]
             selection = receptor.select('resi', resi, return_ind=True)
             selection &= receptor.select('chain', chain, return_ind=True)
             selection = np.logical_not(selection)
