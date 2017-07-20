@@ -2,6 +2,7 @@
 
 import argparse
 from string import ascii_uppercase
+from itertools import izip
 
 from .validator import Validator
 from .volume import Volume
@@ -14,12 +15,14 @@ def parse_args():
             help="CCP4 map file.")
     p.add_argument("resolution", type=float,
             help="Resolution of map.")
-    p.add_argument("structures", nargs="+", type=Structure.fromfile,
+    p.add_argument("structures", nargs="+",
             help="PDB files containing structures.")
     p.add_argument("-c", "--cutoff", type=float, default=1,
             help="Number of sigmas standard deviation needs to be higher.")
     p.add_argument("-o", "--output", default="multiconformer.pdb",
             help="Name of output file.")
+    p.add_argument("-s", "--simple", action='store_true',
+            help="Use fast simple density creation.")
 
     args = p.parse_args()
     return args
@@ -29,9 +32,21 @@ def main():
 
     args = parse_args()
     args.map.set_spacegroup("P1")
+    structures = [Structure.fromfile(fname) for fname in args.structures]
 
     validator = Validator(args.map, args.resolution)
-    structures_sorted = sorted(args.structures, key=lambda structure: structure.q[0], reverse=True)
+    #structures_sorted = sorted(structures, 
+    #        key=lambda structure: structure.q[0], reverse=True)
+
+    # Get cross-correlations
+    for s in structures:
+        s.rscc = validator.rscc(s)
+    
+    structures_sorted = sorted(structures, 
+            key=lambda structure: structure.rscc, reverse=True)
+    for fname, s in izip(args.structures, structures):
+        print fname, s.rscc
+
     multiconformer = structures_sorted[0]
     multiconformer.data['altloc'].fill('A')
     character_index = 0
@@ -39,7 +54,7 @@ def main():
     for structure in structures_sorted[1:]:
         structure.data['altloc'].fill(ascii_uppercase[nconformers])
         new_multiconformer = multiconformer.combine(structure)
-        diff = validator.fisher_z_difference(multiconformer, new_multiconformer, simple=True)
+        diff = validator.fisher_z_difference(multiconformer, new_multiconformer, simple=args.simple)
         print diff
         if diff < args.cutoff:
             continue
