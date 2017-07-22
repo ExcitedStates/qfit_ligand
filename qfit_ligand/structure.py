@@ -2,6 +2,7 @@ import os
 from collections import defaultdict, Sequence
 import operator
 import logging
+import gzip
 logger = logging.getLogger(__name__)
 
 import numpy as np
@@ -20,7 +21,7 @@ class Structure(object):
              ('e', np.str_, 2), ('charge', np.str_, 2),
              ]
 
-    def __init__(self, data, coor):
+    def __init__(self, data, coor, resolution=None):
         self.natoms = data['atomid'].size
         self.data = data
         self.coor = coor
@@ -31,10 +32,12 @@ class Structure(object):
             if attr not in list('xyz'):
                 setattr(self, attr, data[attr])
         self._connectivity = None
+        self.resolution = resolution
 
     @classmethod
     def fromfile(cls, fname):
-        dd = PDBFile.read(fname).coor
+        pdbfile = PDBFile.read(fname)
+        dd = pdbfile.coor
         natoms = len(dd['atomid'])
         data = np.zeros(natoms, dtype=cls.dtype)
         for attr in cls.attributes:
@@ -42,7 +45,7 @@ class Structure(object):
                 data[attr] = dd[attr]
         # Make the coordinates a separate array as they will be changed a lot
         coor = np.asarray(zip(dd['x'], dd['y'], dd['z']), dtype=np.float64)
-        return cls(data, coor)
+        return cls(data, coor, pdbfile.resolution)
 
     def tofile(self, fname):
         PDBFile.write(fname, self)
@@ -51,8 +54,13 @@ class Structure(object):
         return np.sqrt(((self.coor - structure.coor) ** 2).mean() * 3)
 
     def combine(self, structure):
+        if self.resolution == structure.resolution:
+            resolution = self.resolution
+        else:
+            resolution = None
+
         return Structure(np.hstack((self.data, structure.data)),
-                         np.vstack((self.coor, structure.coor)))
+                         np.vstack((self.coor, structure.coor)), resolution)
 
     def select(self, identifier, values, loperator='==', return_ind=False):
         """A simple way of selecting atoms"""
@@ -85,7 +93,7 @@ class Structure(object):
         if return_ind:
             return selection
         else:
-            return self.__class__(self.data[selection], self.coor[selection])
+            return self.__class__(self.data[selection], self.coor[selection], self.resolution)
 
     def _get_property(self, ptype):
         elements, ind = np.unique(self.data['e'], return_inverse=True)
@@ -322,7 +330,15 @@ class PDBFile(object):
     @classmethod
     def read(cls, fname):
         cls.coor = defaultdict(list)
-        with open(fname) as f:
+        cls.resolution = None
+        if fname[-3:] == '.gz':
+            fopen = gzip.open
+            mode = 'rb'
+        else:
+            fopen = open
+            mode = 'r'
+
+        with fopen(fname, mode) as f:
             for line in f:
                 if line.startswith(('ATOM', 'HETATM')):
                     values = CoorRecord.parse_line(line)
@@ -330,6 +346,8 @@ class PDBFile(object):
                         cls.coor[field].append(values[field])
                 elif line.startswith('MODEL'):
                     raise NotImplementedError("MODEL record is not implemented.")
+                elif line.startswith('REMARK   2 RESOLUTION'):
+                    cls.resolution = float(line.split()[-2])
         return cls
 
     @staticmethod
