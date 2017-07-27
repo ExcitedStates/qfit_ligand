@@ -11,7 +11,7 @@ class Validator(object):
         self.xmap = xmap
         self.resolution = resolution
 
-    def rscc(self, structure, rmask=1, mask_structure=None, simple=True):
+    def rscc(self, structure, rmask=1.5, mask_structure=None, simple=True):
         model_map = Volume.zeros_like(self.xmap)
         model_map.set_spacegroup("P1")
         if mask_structure is None:
@@ -25,16 +25,10 @@ class Validator(object):
             transformer = Transformer(structure, model_map, simple=simple)
         transformer.density()
 
-        target_values = self.xmap.array[mask]
-        model_values = model_map.array[mask]
-        target_values -= target_values.mean()
-        target_values /= target_values.std()
-        model_values -= model_values.mean()
-        model_values /= model_values.std()
-        corr = (target_values * model_values).sum() / mask.sum()
+        corr = np.corrcoef(self.xmap.array[mask], model_map.array[mask])[0, 1]
         return corr
 
-    def fisher_z_difference(self, structure1, structure2, rmask=1, simple=True):
+    def fisher_z_difference(self, structure1, structure2, rmask=1.5, simple=True):
         # Create mask of combined structures
         combined = structure1.combine(structure2)
         model_map = Volume.zeros_like(self.xmap)
