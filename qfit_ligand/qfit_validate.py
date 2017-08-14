@@ -5,6 +5,8 @@ from string import ascii_uppercase
 from itertools import izip
 from sys import stdout
 
+import numpy as np
+
 from .validator import Validator
 from .volume import Volume
 from .structure import Structure
@@ -57,6 +59,8 @@ def main():
     # Build up the multiconformer model.
     multiconformer = structures_sorted[0]
     multiconformer.data['altloc'].fill('A')
+    starting_conformer = multiconformer
+    center = multiconformer.coor.mean(axis=0)
     character_index = 0
     nconformers = 1
     for structure in structures_sorted[1:]:
@@ -67,8 +71,11 @@ def main():
         rscc_multi = validator.rscc(multiconformer, rmask=args.radius, 
                 mask_structure=new_multiconformer)
         rscc_new_multi = validator.rscc(new_multiconformer, rmask=args.radius)
-        zscore_file.write('{rscc_old:.3f}\t{rscc_new:.3f}\t{zscore:.3f}\n'.format(
-            rscc_old=rscc_multi, rscc_new=rscc_new_multi, zscore=diff))
+        rmsd = starting_conformer.rmsd(structure)
+        shift = np.linalg.norm(center - structure.coor.mean(axis=0))
+        zscore_file.write('{rscc_old:.3f}\t{rscc_new:.3f}\t{zscore:.3f}\t{rmsd:.2f}\t{shift:.2f}\n'.format(
+            rscc_old=rscc_multi, rscc_new=rscc_new_multi, zscore=diff,
+            rmsd=rmsd, shift=shift))
         if diff < args.cutoff:
             continue
         nconformers += 1
