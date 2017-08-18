@@ -28,10 +28,28 @@ class Validator(object):
         corr = np.corrcoef(self.xmap.array[mask], model_map.array[mask])[0, 1]
         return corr
 
+    def fisher_z(self, structure, rmask=1.5, simple=True):
+
+        model_map = Volume.zeros_like(self.xmap)
+        model_map.set_spacegroup("P1")
+        transformer = Transformer(structure, model_map)
+        transformer.mask(rmask)
+        mask = model_map.array > 0
+        nvoxels = mask.sum()
+        mv = nvoxels * self.xmap.voxel_volume
+        model_map.array.fill(0)
+        transformer.density()
+        corr = np.corrcoef(self.xmap.array[mask], model_map.array[mask])[0, 1]
+        # Transform to Fisher z-score
+        sigma = 1.0 / np.sqrt(mv / self.resolution - 3)
+        fisher = 0.5 * np.log((1 + corr) / (1 - corr))
+        return fisher
+
     def fisher_z_difference(self, structure1, structure2, rmask=1.5, simple=True):
         # Create mask of combined structures
         combined = structure1.combine(structure2)
         model_map = Volume.zeros_like(self.xmap)
+        model_map.set_spacegroup("P1")
         transformer = Transformer(combined, model_map)
         transformer.mask(rmask)
         mask = model_map.array > 0

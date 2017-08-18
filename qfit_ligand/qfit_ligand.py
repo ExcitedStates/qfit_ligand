@@ -48,15 +48,15 @@ def parse_args():
             help="Stepsize for dihedral angle sampling in degree.")
     p.add_argument("-c", "--cardinality", type=int, default=5, metavar="<int>",
             help="Cardinality constraint used during MIQP.")
-    p.add_argument("-t", "--threshold", type=float, default=0.3, metavar="<float>",
+    p.add_argument("-t", "--threshold", type=float, default=None, metavar="<float>",
             help="Treshold constraint used during MIQP.")
     p.add_argument("-it", "--intermediate-threshold", type=float, default=0.01, metavar="<float>",
             help="Threshold constraint during intermediate MIQP.")
     p.add_argument("-ic", "--intermediate-cardinality", type=int, default=5, metavar="<int>",
             help="Cardinality constraint used during intermediate MIQP.")
-    p.add_argument("-z", "--zscore-cutoff", default=1.0, type=float,
+    p.add_argument("-z", "--zscore-cutoff", default=None, type=float,
             help="Cutoff Number of standard errors an additional conformer model need to increase the z-score in order to be included.")
-    p.add_argument("-d", "--directory", type=os.path.abspath, 
+    p.add_argument("-d", "--directory", type=os.path.abspath,
             default='.', metavar="<dir>",
             help="Directory to store results.")
     p.add_argument("-p", "--processors", type=int,
@@ -66,6 +66,20 @@ def parse_args():
             help="Be verbose.")
     args = p.parse_args()
 
+    # If threshold and cutoff are not defined, use "optimal" values
+    if args.threshold is None:
+        if args.resolution < 1.90:
+            args.threshold = 0.2
+        else:
+            args.threshold = 0.3
+
+    if args.zscore_cutoff is None:
+        if args.resolution < 1.90:
+            args.zscore_cutoff = 1.0
+        else:
+            args.zscore_cutoff = 0.5
+
+
     return args
 
 
@@ -74,7 +88,7 @@ def main():
     args = parse_args()
     mkdir_p(args.directory)
     time0 = time.time()
-    logging_fname = os.path.join(args.directory, 'qfit_ligand.log') 
+    logging_fname = os.path.join(args.directory, 'qfit_ligand.log')
     logging.basicConfig(filename=logging_fname, level=logging.INFO)
     logger.info(' '.join(sys.argv))
     logger.info(time.strftime("%c %Z"))
@@ -98,19 +112,19 @@ def main():
         ligand_selection = structure.select('resi', resi, return_ind=True)
         ligand_selection &= structure.select('chain', chain, return_ind=True)
         receptor_selection = np.logical_not(ligand_selection)
-        receptor = Structure(structure.data[receptor_selection], 
+        receptor = Structure(structure.data[receptor_selection],
                              structure.coor[receptor_selection]).select('e', 'H', '!=')
-        ligand = Ligand(structure.data[ligand_selection], 
+        ligand = Ligand(structure.data[ligand_selection],
                 structure.coor[ligand_selection]).select('altloc', ('', 'A', '1'))
     ligand.q.fill(1)
 
     builder = HierarchicalBuilder(
-            ligand, xmap, args.resolution, receptor=receptor, 
-            build=(not args.no_build), build_stepsize=args.build_stepsize, 
-            stepsize=args.stepsize, local_search=(not args.no_local), 
-            cardinality=args.intermediate_cardinality, 
+            ligand, xmap, args.resolution, receptor=receptor,
+            build=(not args.no_build), build_stepsize=args.build_stepsize,
+            stepsize=args.stepsize, local_search=(not args.no_local),
+            cardinality=args.intermediate_cardinality,
             threshold=args.intermediate_threshold,
-            directory=args.directory, scale=(not args.no_scale), 
+            directory=args.directory, scale=(not args.no_scale),
             cutoff=args.density_cutoff, threads=args.processors,
             )
     builder()
@@ -119,21 +133,32 @@ def main():
     builder._MIQP(threshold=args.threshold, maxfits=args.cardinality)
     base = 'conformer'
     builder.write_results(base=base)
+
     conformers = builder.get_conformers()
     validator = Validator(xmap, args.resolution)
-    character_index = 0
-    for n, conformer in enumerate(conformers, start=1):
-        conformer.data['altloc'].fill(ascii_uppercase[character_index])
-        if n == 1:
-            multiconformer = conformer
-            character_index += 1
-            continue
+    # Order conformers based on rscc
+    for conformer in conformers:
+        conformer.rscc = validator.rscc(conformer, rmask=1.5)
+    conformers_sorted = sorted(conformers, key=lambda conformer: conformer.rscc, reverse=True)
+    multiconformer = conformers_sorted[0]
+    multiconformer.data['altloc'].fill('A')
+    starting_conformer = multiconformer
+    nconformers = 1
+    for conformer in conformers_sorted[1:]:
+        conformer.data['altloc'].fill(ascii_uppercase[nconformers])
         new_multiconformer = multiconformer.combine(conformer)
-        diff = validator.fisher_z_difference(multiconformer, new_multiconformer)
+        diff = validator.fisher_z_difference(multiconformer, new_multiconformer,
+                rmask=1.5, simple=True)
+        rscc_multi = validator.rscc(multiconformer, rmask=1.5)
+        rscc_new_multi = validator.rscc(new_multiconformer, rmask=1.5)
         logger.info("Fisher z-score difference: {:.2f}".format(diff))
-        if diff >= args.zscore_cutoff:
-            multiconformer = new_multiconformer
-            character_index += 1
+        if diff < args.zscore_cutoff:
+            continue
+        nconformers += 1
+        multiconformer = new_multiconformer
+    if nconformers == 1:
+        multiconformer.data['altloc'].fill('')
+
     fname = os.path.join(args.directory, 'multiconformer.pdb')
     multiconformer.tofile(fname)
 
