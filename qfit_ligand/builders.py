@@ -17,7 +17,7 @@ class HierarchicalBuilder(object):
 
     """Build a multi-conformer ligand hierarchically."""
 
-    def __init__(self, ligand, xmap, resolution, receptor=None, 
+    def __init__(self, ligand, xmap, resolution, receptor=None,
             global_search=False, local_search=True, build=True,
             stepsize=2, build_stepsize=1, scale=True, cutoff=None,
             threshold=None, cardinality=5,
@@ -102,6 +102,13 @@ class HierarchicalBuilder(object):
         logger.info("Initializing")
         transformer.initialize()
         transformer.density()
+
+        # Set values below cutoff to zero, to penalize the solvent more
+        if self.cutoff is not None:
+            mean = self.xmap.array.mean()
+            std = self.xmap.array.std()
+            cutoff_mask = ((self.xmap.array - mean) / std) < self.cutoff
+
         xmap_masked = self.xmap.array[mask]
         model_masked = self._model_map.array[mask]
         model_masked_mean = model_masked.mean()
@@ -114,12 +121,13 @@ class HierarchicalBuilder(object):
         self.xmap.array -= xmap_masked_mean
         self.xmap.array *= scaling_factor
         self.xmap.array += model_masked_mean
+
+        if self.cutoff is not None:
+            self.xmap.array[cutoff_mask] = 0
+
         # Subtract the receptor density from the map
         if self.receptor is not None:
             self.xmap.array -= self._model_map.array
-        # Set values below cutoff to zero, to penalize the solvent more
-        if self.cutoff is not None:
-            self.xmap.array[self.xmap.array < self.cutoff] = 0
         self._model_map.array.fill(0)
         #self.xmap.tofile(self._djoiner('map_scaled.ccp4'))
 
@@ -400,8 +408,7 @@ class HierarchicalBuilder(object):
                 ligand.q.fill(occ)
                 conformers.append(ligand)
         # Sort conformers based on occupancy
-        conformers = sorted(conformers, 
-                key=lambda conformer: conformer.q[0], reverse=True)
+        conformers = sorted(conformers, key=lambda conformer: conformer.q[0], reverse=True)
         return conformers
 
     def write_results(self, base='conformer', cutoff=0.01):

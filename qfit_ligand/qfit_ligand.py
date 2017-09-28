@@ -35,7 +35,7 @@ def parse_args():
     p.add_argument("-ns", "--no-scale", action="store_true",
             help="Do not scale density.")
     p.add_argument("-dc", "--density-cutoff", type=float, default=None,
-            help="Density value cutoff. Values below this threshold are set to 0 after scaling.")
+            help="Density value cutoff in sigma of X-ray map. Values below this threshold are set to 0 after scaling to absolute density.")
     #p.add_argument("-g", "--global-search", action="store_true",
     #        help="Perform a global search.")
     p.add_argument("-nb", "--no-build", action="store_true",
