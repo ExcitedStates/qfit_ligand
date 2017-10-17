@@ -54,10 +54,7 @@ def parse_args():
             help="Threshold constraint during intermediate MIQP.")
     p.add_argument("-ic", "--intermediate-cardinality", type=int, default=5, metavar="<int>",
             help="Cardinality constraint used during intermediate MIQP.")
-    p.add_argument("-z", "--zscore-cutoff", default=None, type=float,
-            help="Cutoff Number of standard errors an additional conformer model need to increase the z-score in order to be included.")
-    p.add_argument("-d", "--directory", type=os.path.abspath,
-            default='.', metavar="<dir>",
+    p.add_argument("-d", "--directory", type=os.path.abspath, default='.', metavar="<dir>",
             help="Directory to store results.")
     p.add_argument("-p", "--processors", type=int,
             default=None, metavar="<int>",
@@ -68,17 +65,10 @@ def parse_args():
 
     # If threshold and cutoff are not defined, use "optimal" values
     if args.threshold is None:
-        if args.resolution < 1.90:
+        if args.resolution < 2.00:
             args.threshold = 0.2
         else:
             args.threshold = 0.3
-
-    if args.zscore_cutoff is None:
-        if args.resolution < 1.90:
-            args.zscore_cutoff = 1.0
-        else:
-            args.zscore_cutoff = 0.5
-
 
     return args
 
@@ -126,48 +116,95 @@ def main():
             threshold=args.intermediate_threshold,
             directory=args.directory, scale=(not args.no_scale),
             cutoff=args.density_cutoff, threads=args.processors,
-            )
+    )
     builder()
-    builder.write_results(base='final', cutoff=0)
-
-    builder._MIQP(threshold=args.threshold, maxfits=args.cardinality)
-    base = 'conformer'
-    builder.write_results(base=base)
+    fnames = builder.write_results(base='final', cutoff=0)
 
     conformers = builder.get_conformers()
     validator = Validator(xmap, args.resolution)
     # Order conformers based on rscc
-    for conformer in conformers:
+    for fname, conformer in izip(fnames, conformers):
         conformer.rscc = validator.rscc(conformer, rmask=1.5)
+        conformer.fname = fname
     conformers_sorted = sorted(conformers, key=lambda conformer: conformer.rscc, reverse=True)
-    multiconformer = conformers_sorted[0]
-    multiconformer.data['altloc'].fill('A')
-    starting_conformer = multiconformer
-    nconformers = 1
-    for conformer in conformers_sorted[1:]:
-        conformer.data['altloc'].fill(ascii_uppercase[nconformers])
-        new_multiconformer = multiconformer.combine(conformer)
-        diff = validator.fisher_z_difference(multiconformer, new_multiconformer,
-                rmask=1.5, simple=True)
-        rscc_multi = validator.rscc(multiconformer, rmask=1.5)
-        rscc_new_multi = validator.rscc(new_multiconformer, rmask=1.5)
-        logger.info("Fisher z-score difference: {:.2f}".format(diff))
-        if diff < args.zscore_cutoff:
+    logger.info("Number of conformers before RSCC filtering: {:d}".format(len(conformers)))
+    logger.info("RSCC values:")
+    for conformer in conformers_sorted:
+        logger.info("{fname}: {rscc:.3f}".format(fname=conformer.fname, rscc=conformer.rscc))
+    # Remove conformers with significantly lower rscc
+    best_rscc = conformers_sorted[0].rscc
+    rscc_cutoff = 0.9 * best_rscc
+    conformers = [conformer for conformer in conformers_sorted if conformer.rscc >= rscc_cutoff]
+    logger.info("Number of conformers after RSCC filtering: {:d}".format(len(conformers)))
+
+    # Remove geometrically similar ligands
+    noH = np.logical_not(conformers[0].select('e', 'H', return_ind=True))
+    coor_set = [conformers[0].coor]
+    filtered_conformers = [conformers[0]]
+    for conformer in conformers[1:]:
+        max_dist = min([np.abs(
+            np.linalg.norm(conformer.coor[noH] - coor[noH], axis=1).max()
+            ) for coor in coor_set]
+        )
+        if max_dist < 1.5:
             continue
-        nconformers += 1
-        multiconformer = new_multiconformer
+        coor_set.append(conformer.coor)
+        filtered_conformers.append(conformer)
+    logger.info("Removing redundant conformers.".format(len(conformers)))
+    conformers = filtered_conformers
+    logger.info("Number of conformers: {:d}".format(len(conformers)))
+
+    iteration = 1
+    while True:
+        logger.info("Consistency iteration: {}".format(iteration))
+        # Use builder class to perform MIQP
+        builder._coor_set = [conformer.coor for conformer in conformers]
+        builder._convert()
+        builder._MIQP(threshold=args.threshold, maxfits=args.cardinality)
+
+        # Check if adding a conformer increasing the cross-correlation
+        # sufficiently through the Fisher z transform
+        filtered_conformers = []
+        for occ, conformer in izip(builder._occupancies, conformers):
+            if occ > 0.0001:
+                conformer.data['q'].fill(occ)
+                filtered_conformers.append(conformer)
+        conformers = filtered_conformers
+        logger.info("Number of conformers after MIQP: {}".format(len(conformers)))
+        conformers[0].zscore = float('inf')
+        multiconformer = conformers[0]
+        multiconformer.data['altloc'].fill('A')
+        nconformers = 1
+        filtered_conformers = [conformers[0]]
+        for conformer in conformers[1:]:
+            conformer.data['altloc'].fill(ascii_uppercase[nconformers])
+            new_multiconformer = multiconformer.combine(conformer)
+            diff = validator.fisher_z_difference(
+                multiconformer, new_multiconformer, rmask=1.5, simple=True
+            )
+            if diff < 0.1:
+                continue
+            multiconformer = new_multiconformer
+            conformer.zscore = diff
+            filtered_conformers.append(conformer)
+            nconformers += 1
+        logger.info("Number of conformers after Fisher zscore filtering: {}".format(len(conformers)))
+        if len(filtered_conformers) == len(conformers):
+            conformers = filtered_conformers
+            break
+        conformers = filtered_conformers
+        iteration += 1
     if nconformers == 1:
+        logger.info("No alternate conformer found.")
         multiconformer.data['altloc'].fill('')
+    else:
+        logger.info("Number of alternate conformers found: {}".format(len(conformers)))
+        logger.info("Fisher z scores:")
+        for conformer in conformers[1:]:
+            logger.info("B: {score:.2f}".format(score=conformer.zscore))
 
     fname = os.path.join(args.directory, 'multiconformer.pdb')
     multiconformer.tofile(fname)
-
-    # Redo MIQP with different threshold constraints
-    threshold_list = [0.0, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4]
-    for threshold in threshold_list:
-        builder._MIQP(threshold=threshold, maxfits=args.cardinality)
-        base = 'conformer_t{:.2f}'.format(threshold)
-        builder.write_results(base=base)
 
     m, s = divmod(time.time() - time0, 60)
     logger.info('Time passed: {m:.0f}m {s:.0f}s'.format(m=m, s=s))

@@ -323,13 +323,15 @@ class HierarchicalBuilder(object):
                         starting_bond_index = nbonds_sampled
                     break
 
-    def _convert(self):
+    def _convert(self, tofile=False):
 
         logger.info('Converting structures to densities ({:})'.format(len(self._coor_set)))
         self._transformer.volume.array.fill(0)
         for coor in self._coor_set:
             self.ligand.coor[:] = coor
             self._transformer.mask(self._rmask)
+        if tofile:
+            self._transformer.volume.tofile('mask.ccp4')
         mask = self._transformer.volume.array > 0
         self._transformer.volume.array.fill(0)
 
@@ -340,6 +342,8 @@ class HierarchicalBuilder(object):
             self.ligand.coor[:] = coor
             self._transformer.density()
             self._models[n] = self._transformer.volume.array[mask]
+            if tofile:
+                self._transformer.volume.tofile('density_{}.ccp4'.format(n))
             self._transformer.reset()
 
     def _QP(self):
@@ -407,18 +411,24 @@ class HierarchicalBuilder(object):
                 ligand.coor[:] = coor
                 ligand.q.fill(occ)
                 conformers.append(ligand)
-        # Sort conformers based on occupancy
-        conformers = sorted(conformers, key=lambda conformer: conformer.q[0], reverse=True)
+        ## Sort conformers based on occupancy
+        #conformers = sorted(conformers, key=lambda conformer: conformer.q[0], reverse=True)
         return conformers
 
     def write_results(self, base='conformer', cutoff=0.01):
         logger.info("Writing results to file.")
         fname_base = self._djoiner(base + '_{:d}.pdb')
+        fnames = []
         iterator = itertools.izip(self._coor_set, self._occupancies)
         n = 1
+        old_q = self.ligand.q.copy()
         for coor, occ in iterator:
             if occ >= cutoff:
                 self.ligand.q.fill(occ)
                 self.ligand.coor[:] = coor
-                self.ligand.tofile(fname_base.format(n))
+                fname = fname_base.format(n)
+                self.ligand.tofile(fname)
                 n += 1
+                fnames.append(fname)
+        self.ligand.q[:] = old_q
+        return fnames
