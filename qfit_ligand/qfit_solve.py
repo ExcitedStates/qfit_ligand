@@ -69,6 +69,7 @@ def scale_map(args, xmap, rmask):
     xmap_masked -= xmap_masked_mean
     scaling_factor = ((model_masked * xmap_masked).sum() /
                       (xmap_masked * xmap_masked).sum())
+    args.info.write('Scaling factor: {:.2f}\n'.format(scaling_factor))
     xmap.array -= xmap_masked_mean
     xmap.array *= scaling_factor
     xmap.array += model_masked_mean
@@ -173,7 +174,7 @@ def solve():
 
         # Do MIQP
         miqpsolver = MIQPSolver(target, models)
-        miqpsolver(maxfits=args.cardinality, threshold=0.2)
+        miqpsolver(maxfits=args.cardinality, threshold=args.threshold)
         filtered_conformers = []
         for q, conformer in izip(miqpsolver.occupancies, conformers):
             if q > 0.0001:

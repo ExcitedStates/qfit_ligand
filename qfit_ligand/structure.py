@@ -119,7 +119,7 @@ class Structure(object):
 
 class Ligand(Structure):
 
-    """Ligand class is like a Structure, but has an added topology added to it."""
+    """Ligand class is like a Structure, but has a topology added to it."""
 
     def connectivity(self):
         if self._connectivity is None:
@@ -304,7 +304,7 @@ class BondOrder(object):
         neighbors = []
         for atom in cluster:
             neighbors += np.flatnonzero(self.conn[atom]).tolist()
-        
+
         for n in neighbors:
             for ncluster in self.clusters:
                 if n in ncluster:
