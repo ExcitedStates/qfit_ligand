@@ -7,7 +7,6 @@ import numpy as np
 def main():
 
     packages = ['qfit_ligand']
-    package_data = {'qfit_ligand': [os.path.join('data', '*.npy')]}
     data_files = [('qfit_ligand', ['config.py']),]
 
     ext_modules = [Extension("qfit_ligand._extensions",
@@ -31,11 +30,8 @@ def main():
                   'qfit_ligand = qfit_ligand.qfit_ligand:main',
                   'qfit_solve = qfit_ligand.qfit_solve:solve',
                   'qfit_density = qfit_ligand.qfit_density:main',
-                  'qfit_mtz_to_ccp4 = qfit_ligand.qfit_mtz_to_ccp4:main',
-                  'qfit_sample = qfit_ligand.qfit_sample:main',
                   'qfit_scale = qfit_ligand.qfit_scale:main',
                   'qfit_combine = qfit_ligand.qfit_combine:main',
-                  'qfit_validate = qfit_ligand.qfit_validate:main',
                   ]
               },
          )

@@ -1,4 +1,4 @@
-# qfit\_ligand
+# qFit-ligand
 
 ## Requirements
 
@@ -10,7 +10,7 @@
 
 Optional
 
-* CCTBX
+* CCTBX or Phenix
 
 Optional requirements used for installation
 
@@ -25,8 +25,8 @@ To obtain the requirement, first install `numpy`, `scipy` and `cvxopt` using
 
     pip install numpy scipy cvxopt
 
-Next, obtain a copy of CPLEX, the Community Edition will do. After downloading
-it from the [IBM website][1], install the Python interface
+Next, obtain a copy of CPLEX, the Community Edition will do. After registering
+and downloading it from the [IBM website][1], install the Python interface
 
     cd <CPLEX_ROOT>/cplex/python/2.7/x86_64_<PLATFORM>
     python setup.py install
@@ -40,22 +40,26 @@ as simple as
 
     git clone https://github.com/excitedstates/qfit_ligand
     cd qfit_ligand
-    # Optional: configure config.py to point to CCTBX directory
     python setup.py install
 
 
 ## Usage
 
 The main program that comes with installing `qfit_ligand` is the eponymously named
-`qfit_ligand` command line tool. It's calling signature is
+`qfit_ligand` command line tool. It has two calling interfaces
 
-    qfit_ligand <CCP4-map-P1> <resolution> <PDB>
+    qfit_ligand <CCP4-map> <resolution> <PDB-of-ligand> -r <PDB-of-receptor>
+    qfit_ligand <CCP4-map> <resolution> <PDB-of-ligand-and-receptor> --selection <chain>,<resi>
 
-where `<CCP4-map-P1>` is an electron density map in CCP4 format with P1
-symmetry.  If your current density has a different spacegroup, reduce the
-symmetry to P1 (see below). `<resolution>` is the resolution of the electron
-density, and `<PDB>` is the initial single-conformer ligand conformation in
-PDB-format.
+where `<CCP4-map>` is a 2mFo-DFc electron density map in CCP4 format, and
+`<resolution>` is its corresponding resolution in angstrom. In the first
+command,`<PDB-of-ligand>` is a PDB file containing solely the ligand and
+`<PDB-of-receptor>` a PDB file containing the receptor (and other ligands).
+In the second command, `<PDB-of-ligand-and-receptor` is a PDB file containing
+both the ligand and receptor, and `--selection` requires the chain and residue
+id of the ligand as a comma separated value, e.g. `A,1234`. Note that the
+receptor (and other ligands) are used to determine the scaling factor of the
+density map and used for collision detection during conformer sampling.
 
 To see all options, type
 
@@ -63,18 +67,25 @@ To see all options, type
 
 The main options are `-s` to give the angular stepsize in degree, and `-b` to
 provide the number of degrees of freedom that are sampled simultaneously.
+Reasonably values are `-s 1 -b 1`, `-s 6 -b 2`, and `-s 24 -b 3`. Decreasing
+`-s` and especially increasing `-b` further will be RAM memory intensive and
+will take significantly longer.
 
 
-## Converting your spacegroup to P1
+## Converting MTZ to CCP4
 
-If you have access to CCTBX and configured the `config.py` file, you should
-have access to a working command line tool `qfit_mtz_to_ccp4` which takes as
-input an mtz-file and outputs a CCP4 P1 density. The mtz file for a particular
-PDB can be downloaded from the PDBe, e.g. with `wget`
+If you have access to CCTBX/Phenix use `phenix.mtz2map` to convert a MTZ file
+to CCP4. Make sure it outputs the 2mFo-DFc map. Read the documentation for
+available options.
 
-    wget http://www.ebi.ac.uk/pdbe/coordinates/files/<PDB-ID>_map.mtz
 
-where `<PDB-ID>` is the 4-letter PDB identifyer.
+## Licence
+
+The code is licensed under the Apache Version 2.0 licence (see `LICENSE`).
+
+The `spacegroups.py` module is based on the `SpaceGroups.py` module of the
+`pymmlib` package, originally licensed under the Artistic License 2.0. See the
+`license` directory for a copy and its full license.
 
 
 [1]: https://www-01.ibm.com/software/websphere/products/optimization/cplex-studio-community-edition/ "IBM website"
