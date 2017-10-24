@@ -7,12 +7,11 @@ import numpy as np
 def main():
 
     packages = ['qfit_ligand']
-    data_files = [('qfit_ligand', ['config.py']),]
 
     ext_modules = [Extension("qfit_ligand._extensions",
                       [os.path.join("src", "_extensions.c")],
                       include_dirs=[np.get_include()],
-                      extra_compile_args=['-ffast-math'],
+                      extra_compile_args=['-ffast-math', '-std=c99'],
                       ),
                    ]
 
@@ -21,8 +20,6 @@ def main():
           author='Gydo C.P. van Zundert',
           author_email='gydo.vanzundert@schrodinger.com',
           packages=packages,
-          package_data = package_data,
-          data_files=data_files,
           ext_modules=ext_modules,
           install_requires=['numpy', 'scipy', 'cvxopt', 'cplex'],
           entry_points={

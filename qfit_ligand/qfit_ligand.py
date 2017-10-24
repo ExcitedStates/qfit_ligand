@@ -188,7 +188,7 @@ def main():
             conformer.zscore = diff
             filtered_conformers.append(conformer)
             nconformers += 1
-        logger.info("Number of conformers after Fisher zscore filtering: {}".format(len(conformers)))
+        logger.info("Number of conformers after Fisher zscore filtering: {}".format(len(filtered_conformers)))
         if len(filtered_conformers) == len(conformers):
             conformers = filtered_conformers
             break
@@ -201,7 +201,7 @@ def main():
         logger.info("Number of alternate conformers found: {}".format(len(conformers)))
         logger.info("Fisher z scores:")
         for conformer in conformers[1:]:
-            logger.info("B: {score:.2f}".format(score=conformer.zscore))
+            logger.info("{altloc}: {score:.2f}".format(altloc=conformer.altloc[0], score=conformer.zscore))
 
     fname = os.path.join(args.directory, 'multiconformer.pdb')
     multiconformer.tofile(fname)
