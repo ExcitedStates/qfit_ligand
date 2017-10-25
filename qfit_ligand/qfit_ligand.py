@@ -34,7 +34,7 @@ def parse_args():
             help="Chain and residue id for ligand in main PDB file, e.g. A,105.")
     p.add_argument("-ns", "--no-scale", action="store_true",
             help="Do not scale density.")
-    p.add_argument("-dc", "--density-cutoff", type=float, default=None,
+    p.add_argument("-dc", "--density-cutoff", type=float, default=0.0,
             help="Density value cutoff in sigma of X-ray map. Values below this threshold are set to 0 after scaling to absolute density.")
     #p.add_argument("-g", "--global-search", action="store_true",
     #        help="Perform a global search.")
