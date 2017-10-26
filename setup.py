@@ -7,6 +7,7 @@ import numpy as np
 def main():
 
     packages = ['qfit_ligand']
+    package_data = {'qfit_ligand': [os.path.join('data', '*.npy')]}
 
     ext_modules = [Extension("qfit_ligand._extensions",
                       [os.path.join("src", "_extensions.c")],
@@ -20,6 +21,7 @@ def main():
           author='Gydo C.P. van Zundert',
           author_email='gydo.vanzundert@schrodinger.com',
           packages=packages,
+          package_data=package_data,
           ext_modules=ext_modules,
           install_requires=['numpy', 'scipy', 'cvxopt', 'cplex'],
           entry_points={
