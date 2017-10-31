@@ -21,7 +21,7 @@ class HierarchicalBuilder(object):
             global_search=False, local_search=True, build=True,
             stepsize=2, build_stepsize=1, scale=True, cutoff=None,
             threshold=None, cardinality=5,
-            directory='.', roots=None, threads=None):
+            directory='.', roots=None, threads=None, debug=False):
         self.ligand = ligand
         self.xmap = xmap
         self.resolution = resolution
@@ -38,6 +38,7 @@ class HierarchicalBuilder(object):
             self._rmask = 0.7 + (self.resolution - 0.6) / 3.0
         else:
             self._rmask = 0.5 * self.resolution
+        self._debug = debug
 
         # For MIQP
         self.threshold = threshold
@@ -242,13 +243,18 @@ class HierarchicalBuilder(object):
         # In case all conformers were clashing
         if not self._coor_set:
             return
-        #self._write_intermediate_structures(base='local')
+        if self._debug:
+            self._write_intermediate_structures(base='intermediate')
         self._convert()
         self._QP()
         self._update_conformers()
+        if self._debug:
+            self._write_intermediate_structures(base='qp')
         self._convert()
         self._MIQP()
         self._update_conformers()
+        if self._debug:
+            self._write_intermediate_structures(base='miqp')
 
     def _build_ligand(self):
         """Build up the ligand hierarchically."""
@@ -307,15 +313,18 @@ class HierarchicalBuilder(object):
                     end_sidechain = True
                 if end_iteration or end_sidechain:
                     self._iteration += 1
-                    #self._write_intermediate_structures()
+                    if self._debug:
+                        self._write_intermediate_structures()
                     self._convert()
                     self._QP()
                     self._update_conformers()
-                    #self._write_intermediate_structures('qp')
+                    if self._debug:
+                        self._write_intermediate_structures('qp')
                     self._convert()
                     self._MIQP()
                     self._update_conformers()
-                    #self._write_intermediate_structures('miqp')
+                    if self._debug:
+                        self._write_intermediate_structures('miqp')
 
                     # Stop this building iteration and move on to next
                     starting_bond_index += 1
@@ -399,8 +408,9 @@ class HierarchicalBuilder(object):
         fname_base = self._djoiner(base + '_{:d}_{:d}_{:d}.pdb')
         for n, coor in enumerate(self._coor_set):
             self.ligand.coor[:] = coor
+            ligand = self.ligand.select('q', 0, '!=')
             fname = fname_base.format(self._cluster_index, self._iteration, n)
-            self.ligand.tofile(fname)
+            ligand.tofile(fname)
 
     def get_conformers(self, cutoff=0.01):
         conformers = []
