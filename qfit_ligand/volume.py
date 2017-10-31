@@ -5,7 +5,6 @@ from sys import byteorder as _BYTEORDER
 import warnings
 
 import numpy as np
-from scipy.ndimage import zoom, gaussian_filter
 
 from .spacegroups import GetSpaceGroup
 from ._extensions import extend_to_p1
