@@ -44,7 +44,7 @@ class ClashDetector(object):
                 continue
             dist2 = coor - coor2
             dist2 *= dist2
-            cutoff = self.scaling_factor * (radius + self.radius[key])
+            cutoff = (self.scaling_factor / 2.0) * (radius + self.radius[key])
             cutoff *= cutoff
             clashes = np.any(dist2.sum(axis=1) < cutoff)
 
@@ -82,7 +82,7 @@ class GlobalRotator(object):
 class PrincipalAxisRotator(object):
 
     """Rotate ligand along the principal axes."""
-    
+
     def __init__(self, ligand):
         self.ligand = ligand
         self._center = ligand.coor.mean(axis=0)
@@ -92,7 +92,7 @@ class PrincipalAxisRotator(object):
         # Sort eigenvalues such that lx <= ly <= lz
         sort_ind = np.argsort(eig_values)
         self.principal_axes = np.asarray(eig_vectors[:, sort_ind].T)
-        
+
         self.aligners = [ZAxisAligner(axis) for axis in self.principal_axes]
 
     def __call__(self, angle, axis=2):
@@ -136,7 +136,7 @@ class BondAngleRotator(object):
         # Align the rotation axis to the z-axis for the coordinates
         aligner = ZAxisAligner(axis)
         self._forward = aligner.forward_rotation
-        self._coor_to_rotate = (aligner.backward_rotation * 
+        self._coor_to_rotate = (aligner.backward_rotation *
                 np.asmatrix(self._coor_to_rotate.T)).T
 
     def _find_neighbours_recursively(self, curr):
@@ -155,6 +155,50 @@ class BondAngleRotator(object):
         # axis to the real world frame.
         R = self._forward * np.asmatrix(Rz(angle))
         self.ligand.coor[self.atoms_to_rotate] = (R * self._coor_to_rotate.T).T + self._t
+
+
+class ChiRotator(object):
+
+    """Rotate a residue around a chi-angle"""
+
+    def __init__(self, residue, chi_index):
+        self.residue = residue
+        self.chi_index = chi_index
+        # Get the coordinates that define the torsion angle
+        torsion_atoms = self.residue._residue_data['chi'][chi_index]
+        selection = self.residue.select('atomname', torsion_atoms, return_ind=True).nonzero()[0]
+        new_selection = []
+        for atom in torsion_atoms:
+            for sel in selection:
+                if atom == self.residue.atomname[sel]:
+                    new_selection.append(sel)
+                    break
+        selection = new_selection
+
+        # Build a coordinate frame around it using Gram-Schmidt orthogonalization
+        norm = np.linalg.norm
+        coor = self.residue.coor[selection]
+        self._origin = coor[1].copy()
+        coor -= self._origin
+        zaxis = coor[2]
+        zaxis /= norm(zaxis)
+        yaxis = coor[0] - np.inner(coor[0], zaxis) * zaxis
+        yaxis /= norm(yaxis)
+        xaxis = np.cross(yaxis, zaxis)
+        self._backward = np.asmatrix(np.zeros((3, 3), float))
+        self._backward[0] = xaxis
+        self._backward[1] = yaxis
+        self._backward[2] = zaxis
+        self._forward= self._backward.T.copy()
+
+        # Save the coordinates aligned along the Z-axis for fast future rotation
+        atoms_to_rotate = self.residue._residue_data['chi-rotate'][chi_index]
+        self._atom_selection = self.residue.select('atomname', atoms_to_rotate, return_ind=True)
+        self._coor_to_rotate = np.dot(self.residue.coor[self._atom_selection] - self._origin, self._backward.T)
+
+    def __call__(self, angle):
+        R = self._forward * Rz(np.deg2rad(angle))
+        self.residue.coor[self._atom_selection] = np.dot(self._coor_to_rotate, R.T) + self._origin
 
 
 class BondRotator(object):
@@ -188,7 +232,7 @@ class BondRotator(object):
 
         # Align the rotation axis to the z-axis for the coordinates
         self._forward = aligner.forward_rotation
-        self._coor_to_rotate = (aligner.backward_rotation * 
+        self._coor_to_rotate = (aligner.backward_rotation *
                 np.asmatrix(self._coor_to_rotate.T)).T
 
     def _find_neighbours_recursively(self, curr):
@@ -210,7 +254,7 @@ class BondRotator(object):
 
 
 class ZAxisAligner(object):
-    
+
     """Find the rotation that aligns a vector to the Z-axis."""
 
     def __init__(self, axis):
@@ -255,7 +299,7 @@ def Ry(theta):
                        [-sin_theta, 0, cos_theta]])
 
 
-class RotationSets(object):    
+class RotationSets(object):
 
     # Rotation sets available: (fname, nrot, angle).
     SETS = (('E.npy', 1, 360.0),
@@ -303,7 +347,7 @@ class RotationSets(object):
     def get_local_set(cls, fname='local_10_10.npy'):
         quats = np.load(os.path.join(cls._DATA_DIRECTORY, fname))
         return cls.quat_to_rotmat(quats)
-            
+
     @classmethod
     def local(cls, max_angle, nrots=100):
         quats = []
@@ -361,13 +405,13 @@ class RotationSets(object):
             e1 = np.random.random() * 2 - 1
             e2 = np.random.random() * 2 - 1
             s1 = e1**2 + e2**2
-                
+
         s2 = 1
         while s2 >= 1.0:
             e3 = np.random.random() * 2 - 1
             e4 = np.random.random() * 2 - 1
             s2 = e3**2 + e4**2
-        
+
         q0 = e1
         q1 = e2
         q2 = e3 * np.sqrt((1 - s1)/s2 )

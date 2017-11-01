@@ -50,7 +50,7 @@ class HierarchicalBuilder(object):
         self._djoiner = DJoiner(directory)
 
         if self.receptor is not None:
-            self._cd = ClashDetector(self.ligand, self.receptor, 0.5)
+            self._cd = ClashDetector(self.ligand, self.receptor, scaling_factor=1)
             if self._cd():
                 logger.warning("Initial ligand configuration is clashing!")
 
