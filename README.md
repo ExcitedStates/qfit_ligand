@@ -79,7 +79,7 @@ to CCP4. Make sure it outputs the 2mFo-DFc map. Read the documentation for
 available options.
 
 
-## Licence
+## License
 
 The code is licensed under the Apache Version 2.0 licence (see `LICENSE`).
 

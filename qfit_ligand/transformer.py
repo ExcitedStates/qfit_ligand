@@ -3,7 +3,7 @@ from __future__ import division
 import numpy as np
 from scipy.integrate import quadrature
 
-from .atomsf import ATOM_STRUCTURE_FACTORS
+from .atomsf import ATOM_STRUCTURE_FACTORS, ELECTRON_SCATTERING_FACTORS
 from ._extensions import dilate_points, mask_points
 
 
@@ -12,7 +12,7 @@ class Transformer(object):
     """Transform a structure to a density."""
 
     def __init__(self, ligand, volume, smin=0, smax=0.5, rmax=3.0,
-                 rstep=0.01, simple=False):
+                 rstep=0.01, simple=False, scattering='xray'):
         self.ligand = ligand
         self.volume = volume
         self.smin = smin
@@ -20,7 +20,12 @@ class Transformer(object):
         self.rmax = rmax
         self.rstep = rstep
         self.simple = simple
-        self.asf = ATOM_STRUCTURE_FACTORS
+        if scattering == 'xray':
+            self.asf = ATOM_STRUCTURE_FACTORS
+        elif scattering == 'electron':
+            self.asf = ELECTRON_SCATTERING_FACTORS
+        else:
+            raise ValueError("Scattering source not supported. Chose 'xray' or 'electron'")
         self._initialized = False
 
         # Calculate transforms
