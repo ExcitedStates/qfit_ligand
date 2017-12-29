@@ -25,8 +25,12 @@ To obtain the requirement, first install `numpy`, `scipy` and `cvxopt` using
 
     pip install numpy scipy cvxopt
 
-Next, obtain a copy of CPLEX, the Community Edition will do. After registering
-and downloading it from the [IBM website][1], install the Python interface
+Next, obtain a copy of CPLEX, the Community Edition will do. 
+
+    pip install -c IBMDecisionOptimization docplex cplex
+
+Alternatively, if you have a license for the full version of CPLEX, you 
+can download it from the [IBM website][1], and install the Python interface
 
     cd <CPLEX_ROOT>/cplex/python/2.7/x86_64_<PLATFORM>
     python setup.py install
@@ -35,7 +39,7 @@ where `<CPLEX_ROOT>` is the directory where you install CPLEX, and `<PLATFORM>` 
 a platform dependent string, such as `linux` for Linux systems and `osx` for
 macOSX.
 
-You are all set now to install `qfit_ligand`. Installation of `qfit_ligand` is
+You are now all set now to install `qfit_ligand`. Installation of `qfit_ligand` is
 as simple as
 
     git clone https://github.com/excitedstates/qfit_ligand
