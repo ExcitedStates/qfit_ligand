@@ -25,7 +25,6 @@ def main():
     ext_modules = [Extension("qfit_ligand._extensions",
                       [os.path.join("src", "_extensions.c")],
                       include_dirs=[np.get_include()],
-                      extra_compile_args=['-std=c99'],
                       ),
                    ]
     install_requires = [
