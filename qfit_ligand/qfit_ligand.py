@@ -30,11 +30,11 @@ def parse_args():
     p.add_argument("-r", "--receptor", type=str, default=None,
             metavar="<file>",
             help="PDB file containing receptor for clash detection.")
-    p.add_argument('--selection', default=None, type=str,
+    p.add_argument('--selection', default=None, type=str, metavar="<chain,resi>",
             help="Chain and residue id for ligand in main PDB file, e.g. A,105.")
     p.add_argument("-ns", "--no-scale", action="store_true",
             help="Do not scale density.")
-    p.add_argument("-dc", "--density-cutoff", type=float, default=0.0,
+    p.add_argument("-dc", "--density-cutoff", type=float, default=0.0, metavar="<float>",
             help="Density value cutoff in sigma of X-ray map. Values below this threshold are set to 0 after scaling to absolute density.")
     #p.add_argument("-g", "--global-search", action="store_true",
     #        help="Perform a global search.")
@@ -121,7 +121,7 @@ def main():
             debug=args.debug
     )
     builder()
-    fnames = builder.write_results(base='final', cutoff=0)
+    fnames = builder.write_results(base='conformer', cutoff=0)
 
     conformers = builder.get_conformers()
     validator = Validator(xmap, args.resolution)

@@ -34,7 +34,7 @@ def main():
     ]
 
     setup(name="qfit_ligand",
-          version='0.1.0',
+          version='1.0.0',
           author='Gydo C.P. van Zundert',
           author_email='gydo.vanzundert@schrodinger.com',
           packages=packages,
@@ -44,10 +44,6 @@ def main():
           entry_points={
               'console_scripts': [
                   'qfit_ligand = qfit_ligand.qfit_ligand:main',
-                  'qfit_residue = qfit_ligand.qfit_residue:main',
-                  'qfit_solve = qfit_ligand.qfit_solve:solve',
-                  'qfit_density = qfit_ligand.qfit_density:main',
-                  'qfit_scale = qfit_ligand.qfit_scale:main',
                   'qfit_combine = qfit_ligand.qfit_combine:main',
                   ]
               },
