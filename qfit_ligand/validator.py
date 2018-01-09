@@ -7,22 +7,23 @@ from .transformer import Transformer
 
 class Validator(object):
 
-    def __init__(self, xmap, resolution):
+    def __init__(self, xmap, resolution, scattering='xray'):
         self.xmap = xmap
         self.resolution = resolution
+        self.scattering = scattering
 
     def rscc(self, structure, rmask=1.5, mask_structure=None, simple=True):
         model_map = Volume.zeros_like(self.xmap)
         model_map.set_spacegroup("P1")
         if mask_structure is None:
-            transformer = Transformer(structure, model_map, simple=simple)
+            transformer = Transformer(structure, model_map, simple=simple, scattering=self.scattering)
         else:
-            transformer = Transformer(mask_structure, model_map, simple=simple)
+            transformer = Transformer(mask_structure, model_map, simple=simple, scattering=self.scattering)
         transformer.mask(rmask)
         mask = model_map.array > 0
         model_map.array.fill(0)
         if mask_structure is not None:
-            transformer = Transformer(structure, model_map, simple=simple)
+            transformer = Transformer(structure, model_map, simple=simple, scattering=self.scattering)
         transformer.density()
 
         corr = np.corrcoef(self.xmap.array[mask], model_map.array[mask])[0, 1]

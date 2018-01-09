@@ -166,7 +166,8 @@ class ChiRotator(object):
         self.chi_index = chi_index
         # Get the coordinates that define the torsion angle
         torsion_atoms = self.residue._residue_data['chi'][chi_index]
-        selection = self.residue.select('atomname', torsion_atoms, return_ind=True).nonzero()[0]
+        selection = self.residue.select(
+            'atomname', torsion_atoms, return_ind=True).nonzero()[0]
         new_selection = []
         for atom in torsion_atoms:
             for sel in selection:
@@ -193,12 +194,17 @@ class ChiRotator(object):
 
         # Save the coordinates aligned along the Z-axis for fast future rotation
         atoms_to_rotate = self.residue._residue_data['chi-rotate'][chi_index]
-        self._atom_selection = self.residue.select('atomname', atoms_to_rotate, return_ind=True)
-        self._coor_to_rotate = np.dot(self.residue.coor[self._atom_selection] - self._origin, self._backward.T)
+        self._atom_selection = self.residue.select(
+            'atomname', atoms_to_rotate, return_ind=True)
+        self._coor_to_rotate = np.dot(
+            self.residue.coor[self._atom_selection] - self._origin, self._backward.T)
+        self._tmp = np.zeros_like(self._coor_to_rotate)
 
     def __call__(self, angle):
         R = self._forward * Rz(np.deg2rad(angle))
-        self.residue.coor[self._atom_selection] = np.dot(self._coor_to_rotate, R.T) + self._origin
+        np.dot(self._coor_to_rotate, R.T, self._tmp)
+        self._tmp += self._origin
+        self.residue.coor[self._atom_selection] = self._tmp
 
 
 class BondRotator(object):

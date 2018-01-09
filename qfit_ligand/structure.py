@@ -3,12 +3,17 @@ from collections import defaultdict, Sequence
 import operator
 import logging
 import gzip
+from itertools import izip
+
 logger = logging.getLogger(__name__)
 
 import numpy as np
+from scipy.misc import comb as sp_comb
 from scipy.spatial.distance import pdist as sp_pdist, squareform as sp_squareform
 
 from .elements import ELEMENTS
+from .residues import RESIDUES
+from .samplers import Rz
 
 class Structure(object):
 
@@ -59,12 +64,12 @@ class Structure(object):
         else:
             resolution = None
 
-        return Structure(np.hstack((self.data, structure.data)),
-                         np.vstack((self.coor, structure.coor)), resolution)
+        return self.__class__(np.hstack((self.data, structure.data)),
+                              np.vstack((self.coor, structure.coor)), resolution)
 
     def select(self, identifier, values, loperator='==', return_ind=False):
         """A simple way of selecting atoms"""
-        if loperator == '==':
+        if loperator in ('==', '!='):
             oper = operator.eq
         elif loperator == '<':
             oper = operator.lt
@@ -74,8 +79,6 @@ class Structure(object):
             oper = operator.ge
         elif loperator == '<=':
             oper = operator.le
-        elif loperator == '!=':
-            oper = operator.ne
         else:
             raise ValueError('Logic operator not recognized.')
 
@@ -85,10 +88,9 @@ class Structure(object):
         selection = oper(self.data[identifier], values[0])
         if len(values) > 1:
             for v in values[1:]:
-                if loperator == '!=':
-                    selection &= oper(self.data[identifier], v)
-                else:
                     selection |= oper(self.data[identifier], v)
+        if loperator == '!=':
+            selection = np.logical_not(selection)
 
         if return_ind:
             return selection
@@ -117,6 +119,141 @@ class Structure(object):
         return self._get_property('vdwrad')
 
 
+class Residue(Structure):
+
+    def __init__(self, data, coor, resolution=None):
+        super(Residue, self).__init__(data, coor, resolution)
+        resnames = set(self.resn)
+        if len(resnames) > 1:
+            raise ValueError("Input is more than 1 residue")
+        resname = resnames.pop()
+        self._residue_data = RESIDUES[resname]
+        self.nchi = self._residue_data['nchi']
+        self.nrotamers = len(self._residue_data['rotamers'])
+        self.rotamers = self._residue_data['rotamers']
+
+        self._init_clash_detection()
+
+    def _init_clash_detection(self):
+        # Setup the condensed distance based arrays for clash detection and fill them
+        self._ndistances = self.natoms * (self.natoms - 1) / 2
+        self._clash_mask = np.ones(self._ndistances, bool)
+        self._clash_radius2 = np.zeros(self._ndistances, float)
+        radii = self.covalent_radius
+        bonds = self._residue_data['bonds']
+        offset = sp_comb(self.natoms, 2)
+        for i in xrange(self.natoms - 1):
+            starting_index = int(offset - sp_comb(self.natoms - i, 2)) - i - 1
+            atomname1 = self.atomname[i]
+            covrad1 = radii[i]
+            for j in xrange(i + 1, self.natoms):
+                bond1 = [atomname1, self.atomname[j]]
+                bond2 = bond1[::-1]
+                covrad2 = radii[j]
+                index = starting_index + j
+                self._clash_radius2[index] = covrad1 + covrad2 + 0.5
+                if bond1 in bonds or bond2 in bonds:
+                    self._clash_mask[index] = False
+        self._clash_radius2 *= self._clash_radius2
+        self._clashing = np.zeros(self._ndistances, bool)
+        self._dist2_matrix = np.empty(self._ndistances, float)
+
+        # All atoms are active from the start
+        self.active = np.ones(self.natoms, bool)
+        self._active_mask = np.ones(self._ndistances, bool)
+
+    def set_active(self, selection=None, value=True):
+        if selection is None:
+            self.active.fill(value)
+        else:
+            self.active[selection] = value
+        offset = sp_comb(self.natoms, 2) - 1
+        for i, active in enumerate(self.active[:-1]):
+            starting_index = int(offset - sp_comb(self.natoms - i, 2)) - i
+            end = starting_index + self.natoms - (i + 1)
+            self._active_mask[starting_index: end] = active
+
+    def activate(self, selection=None):
+        self.set_active(selection)
+
+    def deactivate(self, selection=None):
+        self.set_active(selection, value=False)
+
+    def clashes(self):
+        """
+        Checks if there are any internal clashes. Deactivated atoms are
+        not taken into account.
+        """
+        dm = self._dist2_matrix
+        coor = self.coor
+        dot = np.dot
+        k = 0
+        for i in xrange(self.natoms - 1):
+            u = coor[i]
+            for j in xrange(i + 1, self.natoms):
+                u_v = u - coor[j]
+                dm[k] = dot(u_v, u_v)
+                k += 1
+        np.less_equal(dm, self._clash_radius2, self._clashing)
+        self._clashing &= self._clash_mask
+        self._clashing &= self._active_mask
+        nclashes = self._clashing.sum()
+        return nclashes
+
+    def get_chi(self, chi_index):
+        atoms = self._residue_data['chi'][chi_index]
+        selection = self.select('atomname', atoms, return_ind=True).nonzero()[0]
+        ordered_sel = []
+        for atom in atoms:
+            for sel in selection:
+                if atom == self.atomname[sel]:
+                    ordered_sel.append(sel)
+                    break
+        coor = self.coor[ordered_sel]
+        b1 = coor[0] - coor[1]
+        b2 = coor[3] - coor[2]
+        b3 = coor[2] - coor[1]
+        n1 = np.cross(b3, b1)
+        n2 = np.cross(b3, b2)
+        m1 = np.cross(n1, n2)
+
+        norm = np.linalg.norm
+        normfactor = norm(n1) * norm(n2)
+        sinv = norm(m1) / normfactor
+        cosv = np.inner(n1, n2) / normfactor
+        angle = np.rad2deg(np.arctan2(sinv, cosv))
+        # Check sign of angle
+        u = np.cross(n1, n2)
+        if np.inner(u, b3) < 0:
+            angle *= -1
+        return angle
+
+    def set_chi(self, chi_index, value):
+        atoms = self._residue_data['chi'][chi_index]
+        selection = self.select('atomname', atoms, return_ind=True)
+        coor = self.coor[selection]
+        origin = coor[1].copy()
+        coor -= origin
+        zaxis = coor[2]
+        zaxis /= np.linalg.norm(zaxis)
+        yaxis = coor[0] - np.inner(coor[0], zaxis) * zaxis
+        yaxis /= np.linalg.norm(yaxis)
+        xaxis = np.cross(yaxis, zaxis)
+        backward = np.asmatrix(np.zeros((3, 3), float))
+        backward[0] = xaxis
+        backward[1] = yaxis
+        backward[2] = zaxis
+        forward = backward.T
+
+        atoms_to_rotate = self._residue_data['chi-rotate'][chi_index]
+        selection = self.select('atomname', atoms_to_rotate, return_ind=True)
+        coor_to_rotate = np.dot(self.coor[selection] - origin, backward.T)
+        rotation = Rz(np.deg2rad(value - self.get_chi(chi_index)))
+
+        R = forward * rotation
+        self.coor[selection] = np.dot(coor_to_rotate, R.T) + origin
+
+
 class Ligand(Structure):
 
     """Ligand class is like a Structure, but has a topology added to it."""
@@ -134,6 +271,10 @@ class Ligand(Structure):
         return self._connectivity
 
     def clashes(self):
+        """
+        Checks if there are any internal clashes. Atoms with occupancy of 0 are
+        not taken into account.
+        """
         dist_matrix = sp_squareform(sp_pdist(self.coor))
         mask = np.logical_not(self.connectivity())
         occupancy_matrix = (self.q.reshape(1, -1) * self.q.reshape(-1, 1)) > 0
@@ -147,7 +288,7 @@ class Ligand(Structure):
     def bonds(self):
         connectivity = self.connectivity()
         indices = np.nonzero(connectivity)
-        for a, b in zip(*indices):
+        for a, b in izip(*indices):
             print self.atomname[a], self.atomname[b]
 
     def ring_paths(self):
@@ -353,7 +494,7 @@ class PDBFile(object):
     @staticmethod
     def write(fname, structure):
         with open(fname, 'w') as f:
-            for fields in zip(*[getattr(structure, x) for x in CoorRecord.fields]):
+            for fields in izip(*[getattr(structure, x) for x in CoorRecord.fields]):
                 if len(fields[-2]) == 2 or len(fields[2]) == 4:
                     f.write(CoorRecord.line2.format(*fields))
                 else:
@@ -369,15 +510,15 @@ class ModelRecord(object):
     @classmethod
     def parse_line(cls, line):
         values = {}
-        for field, column, dtype in zip(cls.fields, cls.columns, cls.dtypes):
+        for field, column, dtype in izip(cls.fields, cls.columns, cls.dtypes):
             values[field] = dtype(line[slice(*column)].strip())
         return values
 
 
 class CoorRecord(object):
     fields = 'record atomid atomname altloc resn chain resi icode x y z q b e charge'.split()
-    columns = [(0, 6), (6, 11), (12, 16), (16, 17), (17, 20), (21, 22), 
-               (22, 26), (26, 27), (30, 38), (38, 46), (46, 54), (54, 60), 
+    columns = [(0, 6), (6, 11), (12, 16), (16, 17), (17, 20), (21, 22),
+               (22, 26), (26, 27), (30, 38), (38, 46), (46, 54), (54, 60),
                (60, 66), (76, 78), (78, 80),
                ]
     dtypes = (str, int, str, str, str, str, int, str, float, float, float,
@@ -390,6 +531,6 @@ class CoorRecord(object):
     @classmethod
     def parse_line(cls, line):
         values = {}
-        for field, column, dtype in zip(cls.fields, cls.columns, cls.dtypes):
+        for field, column, dtype in izip(cls.fields, cls.columns, cls.dtypes):
             values[field] = dtype(line[slice(*column)].strip())
         return values

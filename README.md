@@ -8,13 +8,14 @@
 * cvxopt
 * IBM ILOG CPLEX Optimization Studio (Community Edition)
 
-Optional
+Optional for MTZ to CCP4 file conversion
 
 * CCTBX or Phenix
 
 Optional requirements used for installation
 
 * pip
+* conda
 * git
 
 
@@ -25,17 +26,23 @@ To obtain the requirement, first install `numpy`, `scipy` and `cvxopt` using
 
     pip install numpy scipy cvxopt
 
-Next, obtain a copy of CPLEX, the Community Edition will do. 
+Next, obtain a copy of CPLEX, the Community Edition will do, using one of the
+two following ways. If you are using Anaconda Python, CPLEX can be
+straightforwardly installed using `conda`
 
-    pip install -c IBMDecisionOptimization docplex cplex
+    conda install -c ibmdecisionoptimization cplex
 
-Alternatively, if you have a license for the full version of CPLEX, you 
-can download it from the [IBM website][1], and install the Python interface
+Note that `numpy` and `scipy` can also be installed with `conda`. `cvxopt`,
+however, requires `pip` to get the latest version.
+
+The second more tedious option is registering and downloading it from the 
+[IBM website][1]. After installing and unpacking the software, install the CPLEX
+Python interface
 
     cd <CPLEX_ROOT>/cplex/python/2.7/x86_64_<PLATFORM>
     python setup.py install
 
-where `<CPLEX_ROOT>` is the directory where you install CPLEX, and `<PLATFORM>` is
+where `<CPLEX_ROOT>` is the directory where you installed CPLEX, and `<PLATFORM>` is
 a platform dependent string, such as `linux` for Linux systems and `osx` for
 macOSX.
 
@@ -75,6 +82,16 @@ Reasonably values are `-s 1 -b 1`, `-s 6 -b 2`, and `-s 24 -b 3`. Decreasing
 `-s` and especially increasing `-b` further will be RAM memory intensive and
 will take significantly longer.
 
+Other useful options are `-d` to store the results in a directory to your
+chosing, and if `-v` to be more verbose about the output, especially when using
+it interactively in the shell.
+
+The output of `qfit_ligand` consists of the following files:
+
+* *multiconformer.pdb*: Final occupancy weighted multiconformer model.
+* *conformer_N.pdb*: Conformers found before the final rescoring round, where *N* is an integer.
+* *qfit_ligand.log*: Logging file of run.
+
 
 ## Converting MTZ to CCP4
 
@@ -83,14 +100,16 @@ to CCP4. Make sure it outputs the 2mFo-DFc map. Read the documentation for
 available options.
 
 
-## Licence
+## License
 
-The code is licensed under the Apache Version 2.0 licence (see `LICENSE`).
+The code is licensed under the MIT licence (see `LICENSE`).
 
 The `spacegroups.py` module is based on the `SpaceGroups.py` module of the
 `pymmlib` package, originally licensed under the Artistic License 2.0. See the
-`license` directory for a copy and its full license.
+`licenses` directory for a copy of the original source code and its full license.
 
+The `elements.py` is licensed under MIT, Copyright (c) 2005-2015, Christoph
+Gohlke. See file header.
 
 [1]: https://www-01.ibm.com/software/websphere/products/optimization/cplex-studio-community-edition/ "IBM website"
 
