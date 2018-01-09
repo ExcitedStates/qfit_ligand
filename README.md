@@ -21,7 +21,7 @@ Optional requirements used for installation
 
 ## Installation
 
-To obtain the requirement, first install `numpy`, `scipy` and `cvxopt` using
+To obtain the requirements, first install `numpy`, `scipy` and `cvxopt` using
 `pip`
 
     pip install numpy scipy cvxopt
