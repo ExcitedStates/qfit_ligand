@@ -179,7 +179,8 @@ fail:
   Py_XDECREF(py_derivatives);
   Py_XDECREF(py_grid_to_cart);
   Py_XDECREF(py_target);
-  PyArray_XDECREF_ERR(py_gradients);
+  PyArray_DiscardWritebackIfCopy(py_gradients);
+  Py_XDECREF(py_gradients);
   return NULL;
 }
 
@@ -258,7 +259,8 @@ fail:
   Py_XDECREF(py_grid);
   Py_XDECREF(py_offset);
   Py_XDECREF(py_symop);
-  PyArray_XDECREF_ERR(py_out);
+  PyArray_DiscardWritebackIfCopy(py_out);
+  Py_XDECREF(py_out);
   return NULL;
 }
 
@@ -399,7 +401,8 @@ fail:
     Py_XDECREF(py_lmax);
     Py_XDECREF(py_occupancies);
     Py_XDECREF(py_grid_to_cartesian);
-    PyArray_XDECREF_ERR(py_out);
+    PyArray_DiscardWritebackIfCopy(py_out);
+    Py_XDECREF(py_out);
     return NULL;
 }
 
@@ -526,7 +529,8 @@ fail:
     Py_XDECREF(py_occupancies);
     Py_XDECREF(py_lmax);
     Py_XDECREF(py_grid_to_cartesian);
-    PyArray_XDECREF_ERR(py_out);
+    PyArray_DiscardWritebackIfCopy(py_out);
+    Py_XDECREF(py_out);
     return NULL;
 }
 
