@@ -21,23 +21,20 @@ Optional requirements used for installation
 
 ## Installation
 
-To obtain the requirements, first install `numpy`, `scipy` and `cvxopt` using
-`pip`
+If you have access to the `conda` package manager, installing all dependencies
+is straightforward
+
+    conda install -c conda-forge numpy scipy cvxopt
+    conda install -c ibmdecisionoptimization cplex
+
+If you prefer the more traditional `pip` tool, the requirements can be installed
+as follows
 
     pip install numpy scipy cvxopt
 
-Next, obtain a copy of CPLEX, the Community Edition will do, using one of the
-two following ways. If you are using Anaconda Python, CPLEX can be
-straightforwardly installed using `conda`
-
-    conda install -c ibmdecisionoptimization cplex
-
-Note that `numpy` and `scipy` can also be installed with `conda`. `cvxopt`,
-however, requires `pip` to get the latest version.
-
-The second more tedious option is registering and downloading it from the 
-[IBM website][1]. After installing and unpacking the software, install the CPLEX
-Python interface
+Next, obtain a copy of CPLEX, the Community Edition will do, by registering and
+downloading it from the [IBM website][1]. After installing and unpacking the
+software, install the CPLEX Python interface
 
     cd <CPLEX_ROOT>/cplex/python/2.7/x86_64_<PLATFORM>
     python setup.py install
