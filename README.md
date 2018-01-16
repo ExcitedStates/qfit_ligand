@@ -85,7 +85,7 @@ it interactively in the shell.
 
 The output of `qfit_ligand` consists of the following files:
 
-* *multiconformer.pdb*: Final occupancy weighted multiconformer model.
+* *multiconformer.pdb*: Final occupancy weighted ligand multiconformer model.
 * *conformer_N.pdb*: Conformers found before the final rescoring round, where *N* is an integer.
 * *qfit_ligand.log*: Logging file of run.
 
