@@ -90,6 +90,19 @@ The output of `qfit_ligand` consists of the following files:
 * *qfit_ligand.log*: Logging file of run.
 
 
+## Combining multiconformer ligand with receptor
+
+To combine the output multiconformer ligand with the receptor use the following command
+
+    qfit_combine <multiconformer-ligand-pdbs> -r <receptor> --remove -o <output>
+
+where `<multiconformer-ligand-pdbs>` is one or more PDB files of the ligand you
+want to recombine with the receptor, `<receptor>` the PDB file of the receptor,
+the `--remove` flag is optionally used the remove the ligand in the current
+`<receptor>` file, and `<output>` is the file name of the combined PDB
+structure.
+
+
 ## Converting MTZ to CCP4
 
 If you have access to CCTBX/Phenix use `phenix.mtz2map` to convert a MTZ file
