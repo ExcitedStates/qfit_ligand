@@ -28,8 +28,8 @@ def main():
                       ),
                    ]
     install_requires = [
-        'numpy>=1.11',
-        'scipy>=0.19',
+        'numpy>=1.14',
+        'scipy>=1.00',
         'cvxopt>=1.1.9',
     ]
 
