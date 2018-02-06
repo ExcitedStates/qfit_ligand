@@ -1,9 +1,11 @@
+from __future__ import division
+
+import gzip
+import logging
+import operator
 import os
 from collections import defaultdict, Sequence
-import operator
-import logging
-import gzip
-from itertools import izip
+from itertools import izip, product
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +15,7 @@ from scipy.spatial.distance import pdist as sp_pdist, squareform as sp_squarefor
 
 from .elements import ELEMENTS
 from .residues import RESIDUES
-from .samplers import Rz
+from .samplers import Rz, aa_to_rotmat
 
 class Structure(object):
 
@@ -56,6 +58,8 @@ class Structure(object):
         PDBFile.write(fname, self)
 
     def rmsd(self, structure):
+        #diff = (self.coor - structure.coor).ravel()
+        #return np.sqrt(3 * np.inner(diff, diff) / diff.size)
         return np.sqrt(((self.coor - structure.coor) ** 2).mean() * 3)
 
     def combine(self, structure):
@@ -90,7 +94,7 @@ class Structure(object):
             for v in values[1:]:
                     selection |= oper(self.data[identifier], v)
         if loperator == '!=':
-            selection = np.logical_not(selection)
+            np.logical_not(selection, out=selection)
 
         if return_ind:
             return selection
@@ -180,10 +184,11 @@ class Residue(Structure):
         self.set_active(selection, value=False)
 
     def clashes(self):
+
+        """Checks if there are any internal clashes.
+        Deactivated atoms are not taken into account.
         """
-        Checks if there are any internal clashes. Deactivated atoms are
-        not taken into account.
-        """
+
         dm = self._dist2_matrix
         coor = self.coor
         dot = np.dot
@@ -254,29 +259,60 @@ class Residue(Structure):
         self.coor[selection] = np.dot(coor_to_rotate, R.T) + origin
 
 
+class _RecursiveNeighborChecker(object):
+
+    """ Get all neighbors starting from a root and neighbor
+
+    Used to detect which atoms to rotate given a connectivity matrix and two
+    atoms along which to rotate.
+    """
+
+    def __init__(self, root, neighbor, connectivity):
+
+        self.root = root
+        self.neighbors = [root]
+        self._find_neighbors_recursively(neighbor, connectivity)
+        self.neighbors.remove(root)
+
+    def _find_neighbors_recursively(self, neighbor, conn):
+        self.neighbors.append(neighbor)
+        neighbors = np.flatnonzero(conn[neighbor])
+        for n in neighbors:
+            if n not in self.neighbors:
+                self._find_neighbors_recursively(n, conn)
+
+
 class Ligand(Structure):
 
     """Ligand class is like a Structure, but has a topology added to it."""
 
-    def connectivity(self):
-        if self._connectivity is None:
-            dist_matrix = sp_squareform(sp_pdist(self.coor))
-            covrad = self.covalent_radius
-            cutoff_matrix = np.repeat(covrad, self.natoms).reshape(self.natoms, self.natoms)
-            cutoff_matrix = cutoff_matrix + cutoff_matrix.T + 0.5
-            connectivity_matrix = (dist_matrix < cutoff_matrix)
-            np.fill_diagonal(connectivity_matrix, False)
-            self._connectivity = connectivity_matrix
-            self._cutoff_matrix = cutoff_matrix
-        return self._connectivity
+    def __init__(self, *args, **kwargs):
+        super(Ligand, self).__init__(*args, **kwargs)
+        self._get_connectivity()
+
+    def _get_connectivity(self):
+        """Determine connectivity matrix of ligand and associated distance
+        cutoff matrix for later clash detection.
+        """
+
+        dist_matrix = sp_squareform(sp_pdist(self.coor))
+        covrad = self.covalent_radius
+        natoms = self.natoms
+        cutoff_matrix = np.repeat(covrad, natoms).reshape(natoms, natoms)
+        # Add 0.5 A to give covalently bound atoms more room
+        cutoff_matrix = cutoff_matrix + cutoff_matrix.T + 0.5
+        connectivity_matrix = (dist_matrix < cutoff_matrix)
+        # Atoms are not connected to themselves
+        np.fill_diagonal(connectivity_matrix, False)
+        self.connectivity = connectivity_matrix
+        self._cutoff_matrix = cutoff_matrix
 
     def clashes(self):
-        """
-        Checks if there are any internal clashes. Atoms with occupancy of 0 are
-        not taken into account.
+        """Checks if there are any internal clashes.
+        Atoms with occupancy of 0 are not taken into account.
         """
         dist_matrix = sp_squareform(sp_pdist(self.coor))
-        mask = np.logical_not(self.connectivity())
+        mask = np.logical_not(self.connectivity)
         occupancy_matrix = (self.q.reshape(1, -1) * self.q.reshape(-1, 1)) > 0
         mask &= occupancy_matrix
         np.fill_diagonal(mask, False)
@@ -286,8 +322,8 @@ class Ligand(Structure):
         return False
 
     def bonds(self):
-        connectivity = self.connectivity()
-        indices = np.nonzero(connectivity)
+        """Print bonds"""
+        indices = np.nonzero(self.connectivity)
         for a, b in izip(*indices):
             print self.atomname[a], self.atomname[b]
 
@@ -307,7 +343,7 @@ class Ligand(Structure):
             return ring
         ring_paths = []
         T = {}
-        conn = self.connectivity()
+        conn = self.connectivity
         for root in xrange(self.natoms):
             if root in T:
                 continue
@@ -328,13 +364,14 @@ class Ligand(Structure):
         return ring_paths
 
     def rotatable_bonds(self):
-        """
-        Determine all rotatable bonds. 
+
+        """Determine all rotatable bonds.
+
         A rotatable bond is currently described as two neighboring atoms with
         more than 1 neighbor and which are not part of the same ring.
         """
 
-        conn = self.connectivity()
+        conn = self.connectivity
         rotatable_bonds = []
         rings = self.ring_paths()
         for atom in xrange(self.natoms):
@@ -364,13 +401,14 @@ class Ligand(Structure):
         return rotatable_bonds
 
     def rigid_clusters(self):
-        """
-        Find rigid clusters / seeds in the molecule. Currently seeds are
-        either rings or terminal ends of the molecule, i.e. the last two
-        atoms.
+
+        """Find rigid clusters / seeds in the molecule.
+
+        Currently seeds are either rings or terminal ends of the molecule, i.e.
+        the last two atoms.
         """
 
-        conn = self.connectivity()
+        conn = self.connectivity
         rings = self.ring_paths()
         clusters = []
         for root in xrange(self.natoms):
@@ -391,23 +429,26 @@ class Ligand(Structure):
             # Check if atom is part of a ring, if so add all atoms. This
             # step combines multi-ring systems.
             ring_atom = False
-            for atom in cluster:
-                for ring in rings:
-                    if atom in ring:
-                        ring_atom = True
-                        for a in ring:
-                            if a not in cluster:
-                                cluster.append(a)
+            for atom, ring in product(cluster, rings):
+                if atom in ring:
+                    ring_atom = True
+                    for a in ring:
+                        if a not in cluster:
+                            cluster.append(a)
+
             # If root is not part of a ring, check if it is connected to a
             # terminal heavy atom.
             if not ring_atom:
                 neighbors = np.flatnonzero(conn[root])
                 for n in neighbors:
+                    if self.e[n] == 'H':
+                        continue
                     neighbor_neighbors = np.flatnonzero(conn[n])
                     # Hydrogen neighbors don't count
                     hydrogen_neighbors = (self.e[neighbor_neighbors] == 'H').sum()
                     if len(neighbor_neighbors) - hydrogen_neighbors == 1:
                         cluster.append(n)
+
             if len(cluster) > 1:
                 clusters.append(cluster)
         # Add all left-over single unclustered atoms
@@ -421,30 +462,65 @@ class Ligand(Structure):
                 clusters.append([atom])
         return clusters
 
+    def atoms_to_rotate(self, bond_or_root, neighbor=None):
+        """Return indices of atoms to rotate given a bond."""
+
+        if neighbor is None:
+            root, neighbor = bond_or_root
+        else:
+            root = bond_or_root
+
+        neighbors = [root]
+        atoms_to_rotate = self._find_neighbors_recursively(neighbor, neighbors, self.connectivity)
+        atoms_to_rotate.remove(root)
+        return atoms_to_rotate
+
+    def _find_neighbors_recursively(self, neighbor, neighbors, conn):
+        neighbors.append(neighbor)
+        local_neighbors = np.flatnonzero(conn[neighbor])
+        for ln in local_neighbors:
+            if ln not in neighbors:
+                self._find_neighbors_recursively(ln, neighbors, conn)
+        return neighbors
+
+    def rotate_along_bond(self, bond, angle):
+        atoms_to_rotate = self.atoms_to_rotate(bond)
+        origin = self.coor[bond[0]]
+        end = self.coor[bond[1]]
+        axis = end - origin
+        axis /= np.linalg.norm(axis)
+
+        coor = self.coor[atoms_to_rotate]
+        coor -= origin
+        rotmat = aa_to_rotmat(axis, angle)
+        self.coor[atoms_to_rotate] = np.dot(coor, rotmat.T) + origin
+
 
 class BondOrder(object):
 
+    """Determine bond rotation order given a ligand and root."""
+
     def __init__(self, ligand, atom):
         self.ligand = ligand
-        self.conn = self.ligand.connectivity()
+        self._conn = self.ligand.connectivity
         self.clusters = self.ligand.rigid_clusters()
         self.bonds = self.ligand.rotatable_bonds()
-        self.checked_clusters = []
+        self._checked_clusters = []
         self.order = []
         self.depth = []
-        self.bondorder(atom)
+        self._bondorder(atom)
 
-    def bondorder(self, atom, depth=0):
+    def _bondorder(self, atom, depth=0):
         for cluster in self.clusters:
             if atom in cluster:
                 break
-        if cluster in self.checked_clusters:
+        if cluster in self._checked_clusters:
             return
         depth += 1
-        self.checked_clusters.append(cluster)
+        self._checked_clusters.append(cluster)
         neighbors = []
         for atom in cluster:
-            neighbors += np.flatnonzero(self.conn[atom]).tolist()
+            neighbors += np.flatnonzero(self._conn[atom]).tolist()
 
         for n in neighbors:
             for ncluster in self.clusters:
@@ -463,7 +539,7 @@ class BondOrder(object):
                         self.depth.append(depth)
                 except UnboundLocalError:
                     pass
-            self.bondorder(n, depth)
+            self._bondorder(n, depth)
 
 
 class PDBFile(object):
@@ -472,7 +548,7 @@ class PDBFile(object):
     def read(cls, fname):
         cls.coor = defaultdict(list)
         cls.resolution = None
-        if fname[-3:] == '.gz':
+        if fname.endswith('.gz'):
             fopen = gzip.open
             mode = 'rb'
         else:

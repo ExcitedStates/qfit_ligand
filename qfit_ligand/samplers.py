@@ -1,8 +1,34 @@
+from __future__ import division
 import os.path
 from collections import defaultdict
 import itertools
 
 import numpy as np
+
+
+class BackboneRotator(object):
+
+    """Rotate around phi, psi angles."""
+
+    def __init__(self, structure):
+
+        bb_coor = structure.select('name', ('N', 'C', 'CA'))
+        self._ndofs = 2 * bb_coor.natoms // 3
+        self._starting_coor = structure.coor.copy()
+        indices = np.arange(structure.natoms)
+
+    def __call__(self, torsions):
+
+        assert len(torsions) == self._ndofs, "Number of torsions should equal degrees of freedom"
+
+        # We start with the last torsion as this is more efficient
+        torsions = np.deg2rad(torsions[::-1])
+
+        iterator = itertools.izip(torsions, self._aligners, self._selections)
+        for torsion, aligner, selection in iterator:
+            R = aligner.forward_rotation * Rz(torsion)
+            self.structure.coor[selection] = np.dot(self._starting_coor[selection], R.T)
+
 
 
 class ClashDetector(object):
@@ -36,7 +62,8 @@ class ClashDetector(object):
 
     def __call__(self):
         clashes = False
-        np.round(self.ligand.coor / self.voxelspacing, out=self._keys)
+        inv_voxelspacing = 1 / self.voxelspacing
+        np.round(self.ligand.coor * inv_voxelspacing, out=self._keys)
         for key, coor, radius in itertools.izip(self._keys, self.ligand.coor, self.ligand_radius):
             key = tuple(key)
             coor2 = self.grid[key]
@@ -116,7 +143,7 @@ class BondAngleRotator(object):
 
         # Determine which atoms will be moved by the rotation.
         self._root = getattr(ligand, key).tolist().index(a2)
-        self._conn = ligand.connectivity()
+        self._conn = ligand.connectivity
         self.atoms_to_rotate = [self._root]
         self._foundroot = 0
         curr = getattr(ligand, key).tolist().index(a3)
@@ -151,7 +178,7 @@ class BondAngleRotator(object):
     def __call__(self, angle):
 
         # Since the axis of rotation is already aligned with the z-axis, we can
-        # freely rotate them and perform the inverse operation to realign the
+        # freely rotate the coordinates and perform the inverse operation to realign the
         # axis to the real world frame.
         R = self._forward * np.asmatrix(Rz(angle))
         self.ligand.coor[self.atoms_to_rotate] = (R * self._coor_to_rotate.T).T + self._t
@@ -219,7 +246,7 @@ class BondRotator(object):
 
         # Determine which atoms will be moved by the rotation.
         self._root = getattr(ligand, key).tolist().index(a1)
-        self._conn = ligand.connectivity()
+        self._conn = ligand.connectivity
         self.atoms_to_rotate = [self._root]
         self._foundroot = 0
         curr = getattr(ligand, key).tolist().index(a2)
@@ -303,6 +330,18 @@ def Ry(theta):
     return np.asarray([[ cos_theta, 0, sin_theta],
                        [         0, 1,         0],
                        [-sin_theta, 0, cos_theta]])
+
+
+def aa_to_rotmat(axis, angle):
+    """Axis angle to rotation matrix."""
+
+    kx, ky, kz = axis
+    K = np.asmatrix([[0, -kz, ky],
+                     [kz, 0, -kx],
+                     [-ky, kx, 0]])
+    K2 = K * K
+    R = np.identity(3) + np.sin(angle) * K + (1 - np.cos(angle)) * K2
+    return R
 
 
 class RotationSets(object):

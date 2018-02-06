@@ -18,10 +18,10 @@ class HierarchicalBuilder(object):
     """Build a multi-conformer ligand hierarchically."""
 
     def __init__(self, ligand, xmap, resolution, receptor=None,
-            global_search=False, local_search=True, build=True,
-            stepsize=2, build_stepsize=1, scale=True, cutoff=None,
+            local_search=True, build=True,
+            stepsize=2, build_stepsize=1,
             threshold=None, cardinality=5,
-            directory='.', roots=None, threads=None, debug=False):
+            directory='.', roots=None, debug=False):
         self.ligand = ligand
         self.xmap = xmap
         self.resolution = resolution
@@ -29,13 +29,10 @@ class HierarchicalBuilder(object):
         self.stepsize= stepsize
         self.build_stepsize = build_stepsize
         self.directory = directory
-        self.global_search = global_search
         self.local_search = local_search
         self.receptor = receptor
-        self.scale = scale
-        self.cutoff = cutoff
         if self.resolution < 3.0:
-            self._rmask = 0.7 + (self.resolution - 0.6) / 3.0
+            self._rmask = 0.5 + self.resolution / 3.0
         else:
             self._rmask = 0.5 * self.resolution
         self._debug = debug
@@ -43,14 +40,13 @@ class HierarchicalBuilder(object):
         # For MIQP
         self.threshold = threshold
         self.cardinality = cardinality
-        self.threads = threads
 
         self._trans_box = [(-0.2, 0.21, 0.1)] * 3
         self._sampling_range = np.deg2rad(np.arange(0, 360, self.stepsize))
         self._djoiner = DJoiner(directory)
 
         if self.receptor is not None:
-            self._cd = ClashDetector(self.ligand, self.receptor, scaling_factor=1)
+            self._cd = ClashDetector(self.ligand, self.receptor, scaling_factor=0.75)
             if self._cd():
                 logger.warning("Initial ligand configuration is clashing!")
 
@@ -79,64 +75,12 @@ class HierarchicalBuilder(object):
 
         smax = 1 / (2 * self.resolution)
         self._model_map = Volume.zeros_like(self.xmap)
-        # Scale the experimental density using a scaling factor under the
-        # footprint of the receptor if given.
-        if self.scale:
-            self._scale_map()
         # Initialize density creation
         # We can let go of the spacegroup now that we have prepared the map.
         self._model_map.set_spacegroup("P1")
         self._transformer = Transformer(self.ligand, self._model_map, smax=smax, rmax=3)
 
-    def _scale_map(self):
-        logger.info("Scaling map")
-        if self.receptor is not None:
-            footprint = self.receptor
-        else:
-            footprint = self.ligand
-        # smax doesnt have any impact here.
-        transformer = Transformer(footprint, self._model_map, simple=True, rmax=3)
-        logger.info("Making mask.")
-        transformer.mask(self._rmask)
-        mask = self._model_map.array > 0
-        transformer.reset()
-        logger.info("Initializing")
-        transformer.initialize()
-        transformer.density()
-
-        # Set values below cutoff to zero, to penalize the solvent more
-        if self.cutoff is not None:
-            mean = self.xmap.array.mean()
-            std = self.xmap.array.std()
-            cutoff_mask = ((self.xmap.array - mean) / std) < self.cutoff
-
-        xmap_masked = self.xmap.array[mask]
-        model_masked = self._model_map.array[mask]
-        model_masked_mean = model_masked.mean()
-        xmap_masked_mean = xmap_masked.mean()
-        model_masked -= model_masked_mean
-        xmap_masked -= xmap_masked_mean
-        scaling_factor = ((model_masked * xmap_masked).sum() /
-                (xmap_masked * xmap_masked).sum())
-        logger.info("Scaling factor: {:.2f}".format(scaling_factor))
-        self.xmap.array -= xmap_masked_mean
-        self.xmap.array *= scaling_factor
-        self.xmap.array += model_masked_mean
-
-        if self.cutoff is not None:
-            self.xmap.array[cutoff_mask] = 0
-
-        # Subtract the receptor density from the map
-        if self.receptor is not None:
-            self.xmap.array -= self._model_map.array
-        self._model_map.array.fill(0)
-        #self.xmap.tofile(self._djoiner('map_scaled.ccp4'))
-
     def __call__(self):
-
-        #if self.global_search:
-        #    self._global_search()
-        #    self._all_coor_set += self._coor_set
 
         self._all_occupancies = []
         if self.build:
@@ -157,62 +101,12 @@ class HierarchicalBuilder(object):
         self._coor_set = self._all_coor_set
         self._occupancies = np.asarray(self._all_occupancies)
         self._convert()
-        #self._QP()
-        #self._update_conformers()
-        #self._convert()
 
     def _clashing(self):
         if self.receptor is None:
             return self.ligand.clashes()
         else:
             return self.ligand.clashes() or self._cd()
-
-    def _global_search(self):
-        logger.info("Performing global search.")
-
-        rotation_set = RotationSets.get_set(20)
-        self._new_coor_set = []
-        for coor in self._starting_coor_set:
-            self.ligand.coor[:] = coor
-            rotator = GlobalRotator(self.ligand)
-            for rotmat in rotation_set:
-                rotator(rotmat)
-                translator = Translator(self.ligand)
-                translation_set = np.arange(-0.3, 0.3 + 0.1, 0.1)
-                iterator = itertools.product(
-                    translation_set, repeat=3)
-                self._coor_set = []
-                for translation in iterator:
-                    translator(translation)
-                    if not self._clashing():
-                        self._coor_set.append(self.ligand.coor.copy())
-                if not self._coor_set:
-                    continue
-                self._convert()
-                self._QP()
-                self._update_conformers()
-                self._convert()
-                self._MIQP()
-                self._update_conformers()
-                self._new_coor_set += self._coor_set
-                if len(self._new_coor_set) > 1000:
-                    self._coor_set = self._new_coor_set
-                    self._convert()
-                    self._QP()
-                    self._update_conformers()
-                    self._convert()
-                    self._MIQP()
-                    self._update_conformers()
-                    self._new_coor_set = self._coor_set
-
-        self._coor_set = self._new_coor_set
-        if not self._coor_set:
-            return
-        self._convert()
-        self._QP()
-        self._update_conformers()
-        self._convert()
-        self._MIQP()
 
     def _local_search(self):
         """Perform a local rigid body search on the cluster."""
@@ -224,7 +118,7 @@ class HierarchicalBuilder(object):
         self.ligand.q.fill(0)
         self.ligand.q[self._cluster] = 1
         for atom in self._cluster:
-            self.ligand.q[self.ligand.connectivity()[atom]] = 1
+            self.ligand.q[self.ligand.connectivity[atom]] = 1
         center = self.ligand.coor[self._cluster].mean(axis=0)
         new_coor_set = []
         for coor in self._coor_set:
@@ -281,7 +175,7 @@ class HierarchicalBuilder(object):
                         if sampled_bond[0] in cluster or sampled_bond[1] in cluster:
                             self.ligand.q[cluster] = 1
                             for atom in cluster:
-                                self.ligand.q[self.ligand.connectivity()[atom]] = 1
+                                self.ligand.q[self.ligand.connectivity[atom]] = 1
 
                 # Sample by rotating around a bond
                 bond = bonds[bond_index]
@@ -366,7 +260,7 @@ class HierarchicalBuilder(object):
 
     def _MIQP(self, maxfits=None, exact=False, threshold=None):
         logger.info("Starting MIQP.")
-        miqpsolver = MIQPSolver(self._target, self._models, threads=self.threads)
+        miqpsolver = MIQPSolver(self._target, self._models)
         logger.info("Initializing.")
         miqpsolver.initialize()
         logger.info("Solving")
